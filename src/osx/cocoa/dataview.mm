@@ -2580,53 +2580,11 @@ bool wxCocoaDataViewControl::EnableDropTarget(const wxDataFormatArray& formats)
     {
         wxCFMutableArrayRef<CFStringRef> typesarray;
         for (size_t i = 0; i < formats.GetCount(); ++i)
-            // formats.Item(i).AddSupportedTypes(typesarray);
         {
-            switch (formats.Item(i).GetType())
-            {
-                case wxDF_TEXT:
-                case wxDF_OEMTEXT:
-                case wxDF_UNICODETEXT:
-                    CFArrayAppendValue(typesarray, NSStringPboardType);
-                    break;
-
-                case wxDF_BITMAP:
-                    wxGCC_WARNING_SUPPRESS(deprecated-declarations)
-                    CFArrayAppendValue(typesarray, NSPICTPboardType);
-                    wxGCC_WARNING_RESTORE(deprecated-declarations)
-                    break;
-
-                case wxDF_FILENAME:
-                    CFArrayAppendValue(typesarray, NSFilenamesPboardType);
-                    break;
-
-                case wxDF_HTML:
-                    CFArrayAppendValue(typesarray, NSHTMLPboardType);
-                    break;
-
-                case wxDF_TIFF:
-                    CFArrayAppendValue(typesarray, NSTIFFPboardType);
-                    break;
-
-                case wxDF_METAFILE:
-                case wxDF_SYLK:
-                case wxDF_DIF:
-                case wxDF_DIB:
-                case wxDF_PALETTE:
-                case wxDF_PENDATA:
-                case wxDF_RIFF:
-                case wxDF_WAVE:
-                case wxDF_ENHMETAFILE:
-                case wxDF_LOCALE:
-                case wxDF_PRIVATE:
-                case wxDF_INVALID:
-                case wxDF_MAX:
-                    break;
-            }
+            formats.Item(i).AddSupportedTypes(typesarray, wxDataObjectBase::Direction::Set);
         }
 
-        // Add support for internal dataView items' DnD?
-        // CFArrayAppendValue(typesarray, DataViewPboardType);
+        CFArrayAppendValue(typesarray, DataViewPboardType);
 
         [m_OutlineView registerForDraggedTypes:typesarray];
     }
