@@ -3724,7 +3724,7 @@ bool wxDataViewCtrlInternal::EnableDropTarget( const wxDataFormatArray& formats 
 {
     if (formats.GetCount() == 0)
     {
-        // TODO remove drop target if exists
+        gtk_tree_view_unset_rows_drag_dest(GTK_TREE_VIEW(m_owner->GtkGetTreeView()));
 
         return true;
     }
