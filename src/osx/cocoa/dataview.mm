@@ -779,68 +779,79 @@ outlineView:(NSOutlineView*)outlineView
 -(NSDragOperation) setupAndCallDataViewEvents:(wxEventType)eventType dropInfo:(id<NSDraggingInfo>)info item:(id)item
                            proposedChildIndex:(NSInteger)index
 {
-    NSPasteboard* pasteboard([info draggingPasteboard]);
-
-    NSString* bestType([pasteboard availableTypeFromArray:implementation->GetView().registeredDraggedTypes]);
-
-    if ( bestType == nil )
-        return NSDragOperationNone;
-
-    NSDragOperation dragOperation = NSDragOperationNone;
-    wxDataObjectComposite* dataObjects = NULL;
-    wxDataObjectSimple* dataObject = NULL;
-
     wxDataViewCtrl* const dvc(implementation->GetDataViewCtrl());
 
-    wxCHECK_MSG(dvc, false, "Pointer to data view control not set correctly.");
-    wxCHECK_MSG(dvc->GetModel(), false, "Pointer to model not set correctly.");
+    wxDropTarget* dt = dvc->GetDropTarget();
+    if (!dt)
+        return NSDragOperationNone;
 
-    // wxDataViewEvent event(eventType, dvc, wxDataViewItemFromItem(item));
-    if ([bestType compare:DataViewPboardType] == NSOrderedSame)
+    NSPasteboard* pasteboard([info draggingPasteboard]);
+    wxOSXPasteboard wxPastboard(pasteboard);
+    dt->SetCurrentDragSource(&wxPastboard);
+
+    wxDataFormat format = dt->GetMatchingPair();
+    if (format == wxDF_INVALID)
+        return NSDragOperationNone;
+
+    // Create event
+    wxDataViewEvent event(eventType, dvc, wxDataViewItemFromItem(item));
+
+    // Retrieve data info if drop occured
+    if (eventType == wxEVT_DATAVIEW_ITEM_DROP)
     {
-        NSArray*               dataArray((NSArray*)[pasteboard propertyListForType:DataViewPboardType]);
-        NSUInteger             indexDraggedItem, noOfDraggedItems([dataArray count]);
+        if (!dt->GetData())
+            return NSDragOperationNone;
 
-        indexDraggedItem = 0;
-        while (indexDraggedItem < noOfDraggedItems)
+        wxDataObjectComposite *obj = static_cast<wxDataObjectComposite*>(dt->GetDataObject());
+        event.SetDataSize(obj->GetDataSize(format));
+        event.SetDataObject(obj->GetObject(format));
+    }
+
+    // Setup other event properties
+    event.SetProposedDropIndex(index);
+    event.SetDataFormat(format);
+    if (index == -1)
+    {
+        event.SetDropEffect(wxDragCopy);
+    }
+    else
+    {
+        //if index is not -1, we're going to set the default
+        //for the drop effect to None to be compatible with
+        //the other wxPlatforms that don't support it.  In the
+        //user code for for the event, they can set this to
+        //copy/move or similar to support it.
+        event.SetDropEffect(wxDragNone);
+    }
+
+    NSDragOperation dragOperation = NSDragOperationNone;
+
+    // finally, send event:
+    if (dvc->HandleWindowEvent(event) && event.IsAllowed())
+    {
+        switch (event.GetDropEffect())
         {
-            dataObjects = implementation->GetDnDDataObjects((NSData*)[dataArray objectAtIndex:indexDraggedItem]);
-
-            dragOperation = [self callDataViewEvents:eventType dataObjects:dataObjects item:item proposedChildIndex:index];
-
-            if ( dragOperation != NSDragOperationNone )
-                ++indexDraggedItem;
-            else
-                indexDraggedItem = noOfDraggedItems;
-
-            delete dataObjects;
-            dataObjects = NULL;
+            case wxDragCopy:
+                dragOperation = NSDragOperationCopy;
+                break;
+            case wxDragMove:
+                dragOperation = NSDragOperationMove;
+                break;
+            case wxDragLink:
+                dragOperation = NSDragOperationLink;
+                break;
+            case wxDragNone:
+            case wxDragCancel:
+            case wxDragError:
+                dragOperation = NSDragOperationNone;
+                break;
+            default:
+                dragOperation = NSDragOperationEvery;
         }
     }
     else
     {
-        dataObjects = new wxDataObjectComposite();
-
-        if ([bestType compare:NSFilenamesPboardType] == NSOrderedSame)
-        {
-            dataObject = new wxFileDataObject;
-        }
-        else if ([bestType compare:NSStringPboardType] == NSOrderedSame)
-        {
-            dataObject = new wxTextDataObject;
-        }
-        // TODO check for other formats here?
-
-        if (dataObject)
-        {
-            dataObjects->Add(dataObject);
-
-            wxOSXPasteboard wxPastboard(pasteboard);
-            if (dataObject->ReadFromSource(&wxPastboard))
-                dragOperation = [self callDataViewEvents:eventType dataObjects:dataObjects item:item proposedChildIndex:index];
-        }
-
-        delete dataObjects; // Internal dataObject will be deleted too
+        dragOperation = NSDragOperationNone;
     }
 
     return dragOperation;
@@ -850,127 +861,36 @@ outlineView:(NSOutlineView*)outlineView
 {
     wxUnusedVar(outlineView);
 
-    // the pasteboard will be filled up with an array containing the data as
-    // returned by the events (including the data type) and a concatenation of
-    // text (string) data; the text data will only be put onto the pasteboard
-    // if for all items a string representation exists
     wxDataViewCtrl* const dvc = implementation->GetDataViewCtrl();
-
-    wxDataViewItemArray dataViewItems;
-
 
     wxCHECK_MSG(dvc, false,"Pointer to data view control not set correctly.");
     wxCHECK_MSG(dvc->GetModel(),false,"Pointer to model not set correctly.");
 
+    BOOL result = NO;
     if ([writeItems count] > 0)
     {
-        bool            dataStringAvailable(true); // a flag indicating if for all items a data string is available
-        NSMutableArray* dataArray = [NSMutableArray arrayWithCapacity:[writeItems count]]; // data of all items
-        wxString        dataString; // contains the string data of all items
+        // Send a begin drag event for the first selected item and send wxEVT_DATAVIEW_ITEM_BEGIN_DRAG.
+        // If there are several items selected, user can process each in event handler and
+        // fill up the corresponding wxDataObject the way he wants.
+        const wxDataViewItem item = wxDataViewItemFromItem([writeItems objectAtIndex:0]);
+        wxDataViewEvent event(wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, dvc, item);
 
-        // send a begin drag event for all selected items and proceed with
-        // dragging unless the event is vetoed:
-        for (size_t itemCounter=0; itemCounter<[writeItems count]; ++itemCounter)
+        // check if event has not been vetoed:
+        if (dvc->HandleWindowEvent(event) && event.IsAllowed() && event.GetDataObject())
         {
-            bool                   itemStringAvailable(false);              // a flag indicating if for the current item a string is available
-            wxDataObjectComposite* itemObject(new wxDataObjectComposite()); // data object for current item
-            wxString               itemString;                              // contains the TAB concatenated data of an item
+            wxDataObject *dataObject = event.GetDataObject();
 
-            const wxDataViewItem item = wxDataViewItemFromItem([writeItems objectAtIndex:itemCounter]);
-            wxDataViewEvent event(wxEVT_DATAVIEW_ITEM_BEGIN_DRAG, dvc, item);
-            itemString = ::ConcatenateDataViewItemValues(dvc, item);
-            itemObject->Add(new wxTextDataObject(itemString));
-            event.SetDataObject(itemObject);
-            // check if event has not been vetoed:
-            if (dvc->HandleWindowEvent(event) && event.IsAllowed() && (event.GetDataObject()->GetFormatCount() > 0))
-            {
-                size_t const noOfFormats = event.GetDataObject()->GetFormatCount();
-                wxDataFormat* dataFormats(new wxDataFormat[noOfFormats]);
+            wxOSXPasteboard wxPastboard(pasteboard);
 
-                event.GetDataObject()->GetAllFormats(dataFormats,wxDataObject::Get);
-                for (size_t formatCounter=0; formatCounter<noOfFormats; ++formatCounter)
-                {
-                    // constant definitions for abbreviational purposes:
-                    wxDataFormatId const idDataFormat = dataFormats[formatCounter].GetType();
-                    size_t const dataSize       = event.GetDataObject()->GetDataSize(idDataFormat);
-                    size_t const dataBufferSize = sizeof(wxDataFormatId)+dataSize;
-                    // variable definitions (used in all case statements):
-                    // give additional headroom for trailing NULL
-                    wxMemoryBuffer dataBuffer(dataBufferSize+4);
+            wxPastboard.Clear();
+            dataObject->WriteToSink(&wxPastboard);
+            wxPastboard.Flush();
 
-                    dataBuffer.AppendData(&idDataFormat,sizeof(wxDataFormatId));
-                    switch (idDataFormat)
-                    {
-                        case wxDF_TEXT:
-                            // otherwise wxDF_UNICODETEXT already filled up
-                            // the string; and the UNICODE representation has
-                            // priority
-                            if (!itemStringAvailable)
-                            {
-                                event.GetDataObject()->GetDataHere(wxDF_TEXT,dataBuffer.GetAppendBuf(dataSize));
-                                dataBuffer.UngetAppendBuf(dataSize);
-                                [dataArray addObject:[NSData dataWithBytes:dataBuffer.GetData() length:dataBufferSize]];
-                                itemString = wxString(static_cast<char const*>(dataBuffer.GetData())+sizeof(wxDataFormatId),wxConvLocal);
-                                itemStringAvailable = true;
-                            }
-                            break;
-                        case wxDF_UNICODETEXT:
-                            {
-                                event.GetDataObject()->GetDataHere(wxDF_UNICODETEXT,dataBuffer.GetAppendBuf(dataSize));
-                                dataBuffer.UngetAppendBuf(dataSize);
-                                if (itemStringAvailable) // does an object already exist as an ASCII text (see wxDF_TEXT case statement)?
-                                    [dataArray replaceObjectAtIndex:itemCounter withObject:[NSData dataWithBytes:dataBuffer.GetData() length:dataBufferSize]];
-                                else
-                                    [dataArray addObject:[NSData dataWithBytes:dataBuffer.GetData() length:dataBufferSize]];
-
-                                static wxMBConvUTF16 s_UTF16Converter;
-                                itemString = wxString( static_cast<char const*>(dataBuffer.GetData())+sizeof(wxDataFormatId), s_UTF16Converter, dataSize );
-
-                                itemStringAvailable = true;
-                            } /* block */
-                            break;
-                        default:
-                            wxFAIL_MSG("Data object has invalid or unsupported data format");
-                            return NO;
-                    }
-                }
-                delete[] dataFormats;
-                delete itemObject;
-                if (dataStringAvailable)
-                {
-                    if (itemStringAvailable)
-                    {
-                        if (itemCounter > 0)
-                            dataString << wxT('\n');
-                        dataString << itemString;
-                    }
-                    else
-                        dataStringAvailable = false;
-                }
-            }
-            else
-            {
-                delete itemObject;
-                return NO; // dragging was vetoed or no data available
-            }
+            result = YES;
         }
-        if (dataStringAvailable)
-        {
-            wxCFStringRef osxString(dataString);
-
-            [pasteboard declareTypes:[NSArray arrayWithObjects:DataViewPboardType,NSStringPboardType,nil] owner:nil];
-            [pasteboard setPropertyList:dataArray forType:DataViewPboardType];
-            [pasteboard setString:osxString.AsNSString() forType:NSStringPboardType];
-        }
-        else
-        {
-            [pasteboard declareTypes:[NSArray arrayWithObject:DataViewPboardType] owner:nil];
-            [pasteboard setPropertyList:dataArray forType:DataViewPboardType];
-        }
-        return YES;
     }
-    else
-        return NO; // no items to drag (should never occur)
+
+    return result;
 }
 
 //
