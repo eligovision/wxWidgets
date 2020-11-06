@@ -540,20 +540,10 @@ public:
 
     virtual void StartEditor( const wxDataViewItem & item, unsigned int column );
 
-#if wxUSE_DRAG_AND_DROP
-    virtual bool EnableDropTarget(const wxDataFormatArray& formats) wxOVERRIDE;
-#endif // wxUSE_DRAG_AND_DROP
-
-    // drag & drop helper methods
-    wxDataFormat GetDnDDataFormat(wxDataObjectComposite* dataObjects);
-    wxDataObjectComposite* GetDnDDataObjects(NSData* dataObject) const;
-
     // Cocoa-specific helpers
     id GetItemAtRow(int row) const;
 
     virtual void SetFont(const wxFont& font, const wxColour& foreground, long windowStyle, bool ignoreBlack = true);
-
-    const wxCocoaOutlineView* GetView() { return m_OutlineView; }
 
 private:
     void InitOutlineView(long style);
