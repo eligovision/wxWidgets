@@ -5699,8 +5699,10 @@ bool wxDataViewCtrl::DoEnableDropTarget( const wxDataFormatArray &formats )
     wxDataViewDropTarget* dt = NULL;
     if (wxDataObject* dataObject = CreateDataObject(formats))
     {
-        dt = new wxDataViewDropTarget(dataObject);
+        dt = new wxDataViewDropTarget(dataObject, m_clientArea);
     }
+
+    m_clientArea->SetDropTarget(dt);
 
     return true;
 }
