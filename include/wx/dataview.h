@@ -812,18 +812,7 @@ protected:
     virtual wxDataObject* CreateDataObject(const wxDataFormatArray& formats);
 
     virtual bool DoEnableDropTarget(const wxDataFormatArray& formats)
-    {
-        wxDropTarget* dt = NULL;
-        if (wxDataObject* dataObject = CreateDataObject(formats))
-        {
-            dt = new wxDropTarget(dataObject);
-        }
-
-        SetDropTarget(dt);
-
-        return true;
-    }
-
+        { return false; }
 
 #endif // wxUSE_DRAG_AND_DROP
 
