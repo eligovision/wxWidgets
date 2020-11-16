@@ -699,7 +699,7 @@ bool wxDataViewCtrl::DoEnableDropTarget(const wxDataFormatArray &formats)
     return true;
 }
 
-#endif
+#endif // wxUSE_DRAG_AND_DROP
 
 void wxDataViewCtrl::FinishCustomItemEditing()
 {

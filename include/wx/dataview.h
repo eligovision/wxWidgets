@@ -811,7 +811,7 @@ protected:
 #if wxUSE_DRAG_AND_DROP
     virtual wxDataObject* CreateDataObject(const wxDataFormatArray& formats);
 
-    virtual bool DoEnableDropTarget(const wxDataFormatArray& formats)
+    virtual bool DoEnableDropTarget(const wxDataFormatArray& WXUNUSED(formats))
         { return false; }
 
 #endif // wxUSE_DRAG_AND_DROP
