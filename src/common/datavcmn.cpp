@@ -1672,6 +1672,8 @@ void wxDataViewCtrlBase::StartEditor(const wxDataViewItem& item, unsigned int co
     EditItem(item, GetColumn(column));
 }
 
+#if wxUSE_DRAG_AND_DROP
+
 wxDataObject* wxDataViewCtrlBase::CreateDataObject(const wxDataFormatArray& formats)
 {
     if (formats.GetCount() == 0)
@@ -1725,6 +1727,8 @@ wxDataObject* wxDataViewCtrlBase::CreateDataObject(const wxDataFormatArray& form
 
     return dataObject;
 }
+
+#endif // wxUSE_DRAG_AND_DROP
 
 // ---------------------------------------------------------
 // wxDataViewEvent

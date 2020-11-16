@@ -728,7 +728,7 @@ outlineView:(NSOutlineView*)outlineView
     // Create event
     wxDataViewEvent event(eventType, dvc, wxDataViewItemFromItem(item));
 
-    // Retrieve data info if drop occured
+    // Retrieve data info if user released mouse buttton (drop occured)
     if (eventType == wxEVT_DATAVIEW_ITEM_DROP)
     {
         if (!dt->GetData())
