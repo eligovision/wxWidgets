@@ -62,6 +62,8 @@ public:
     virtual bool Show(bool show = true) wxOVERRIDE;
     virtual void SetWindowStyleFlag(long style) wxOVERRIDE;
 
+    void ShowGripper(bool show);
+
     // Windows callbacks
     WXLRESULT MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lParam) wxOVERRIDE;
 
@@ -74,7 +76,6 @@ private:
     // resizable dialogs
     void CreateGripper();
     void DestroyGripper();
-    void ShowGripper(bool show);
     void ResizeGripper();
 
     // this function is used to adjust Z-order of new children relative to the
@@ -83,6 +84,7 @@ private:
 
     // gripper window for a resizable dialog, NULL if we're not resizable
     WXHWND m_hGripper;
+    bool m_showGripper;
 
     // this pointer is non-NULL only while the modal event loop is running
     wxDialogModalData *m_modalData;

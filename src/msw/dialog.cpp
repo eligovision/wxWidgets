@@ -106,6 +106,7 @@ bool wxDialog::Create(wxWindow *parent,
 
     if ( HasFlag(wxRESIZE_BORDER) )
     {
+        m_showGripper = true;
         CreateGripper();
 
         Bind(wxEVT_CREATE, &wxDialog::OnWindowCreate, this);
@@ -263,6 +264,8 @@ void wxDialog::ShowGripper(bool show)
         ResizeGripper();
 
     ::ShowWindow((HWND)m_hGripper, show ? SW_SHOW : SW_HIDE);
+
+    m_showGripper = show;
 }
 
 void wxDialog::ResizeGripper()
@@ -325,7 +328,7 @@ WXLRESULT wxDialog::MSWWindowProc(WXUINT message, WXWPARAM wParam, WXLPARAM lPar
                     wxFALLTHROUGH;
 
                 case SIZE_RESTORED:
-                    if ( m_hGripper )
+                    if ( m_hGripper && m_showGripper)
                         ShowGripper( wParam == SIZE_RESTORED );
 
                     if ( m_showCmd == SW_MINIMIZE )
