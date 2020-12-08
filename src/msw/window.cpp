@@ -4979,10 +4979,13 @@ static void UpdateSizerOnDPIChange(wxSizer* sizer, float scaleFactor)
             ScaleCoordIfSet(min.y, scaleFactor);
             sizerItem->SetMinSize(min);
 
-            wxSize size = sizerItem->GetSize();
-            ScaleCoordIfSet(size.x, scaleFactor);
-            ScaleCoordIfSet(size.y, scaleFactor);
-            sizerItem->SetDimension(wxDefaultPosition, size);
+            if ( sizerItem->IsSpacer() )
+            {
+                wxSize size = sizerItem->GetSize();
+                ScaleCoordIfSet(size.x, scaleFactor);
+                ScaleCoordIfSet(size.y, scaleFactor);
+                sizerItem->SetDimension(wxDefaultPosition, size);
+            }
 
             // Update any child sizers if this is a sizer
             UpdateSizerOnDPIChange(sizerItem->GetSizer(), scaleFactor);
