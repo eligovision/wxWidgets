@@ -779,7 +779,8 @@ void wxNativeFontInfo::InitFromFont(CTFontRef font)
 {
     Init();
 
-    InitFromFontDescriptor(CTFontCopyFontDescriptor(font) );
+    wxCFRef<CTFontDescriptorRef> desc(CTFontCopyFontDescriptor(font));
+    InitFromFontDescriptor( desc );
 }
 
 void wxNativeFontInfo::InitFromFontDescriptor(CTFontDescriptorRef desc)
@@ -1065,6 +1066,7 @@ bool wxNativeFontInfo::FromString(const wxString& s)
         if (descriptor != NULL)
         {
             InitFromFontDescriptor(descriptor);
+            CFRelease(descriptor);
             m_underlined = underlined;
             m_strikethrough = strikethrough;
             m_encoding = encoding;

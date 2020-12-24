@@ -1751,6 +1751,8 @@ outlineView:(NSOutlineView*)outlineView
                     [[notification userInfo] objectForKey:@"NSObject"]);
     wxDataViewEvent event(wxEVT_DATAVIEW_ITEM_COLLAPSED, dvc, item);
     dvc->GetEventHandler()->ProcessEvent(event);
+
+    dvc->AdjustAutosizedColumns();
 }
 
 -(void) outlineViewItemDidExpand:(NSNotification*)notification
@@ -1761,6 +1763,8 @@ outlineView:(NSOutlineView*)outlineView
                     [[notification userInfo] objectForKey:@"NSObject"]);
     wxDataViewEvent event(wxEVT_DATAVIEW_ITEM_EXPANDED, dvc, item);
     dvc->GetEventHandler()->ProcessEvent(event);
+
+    dvc->AdjustAutosizedColumns();
 }
 
 -(void) outlineViewSelectionDidChange:(NSNotification*)notification
@@ -2025,6 +2029,7 @@ void wxCocoaDataViewControl::FitColumnWidthToContent(unsigned int pos)
         MaxWidthCalculator(wxCocoaOutlineView *view,
                            NSTableColumn *column, unsigned columnIndex)
             : m_width(0),
+              m_height(0),
               m_view(view),
               m_column(columnIndex),
               m_indent(0),
@@ -2044,7 +2049,8 @@ void wxCocoaDataViewControl::FitColumnWidthToContent(unsigned int pos)
         void UpdateWithRow(int row)
         {
             NSCell *cell = [m_view preparedCellAtColumn:m_column row:row];
-            unsigned cellWidth = [cell cellSize].width + 1/*round the float up*/;
+            unsigned cellWidth = ceil([cell cellSize].width);
+            unsigned cellHeight = ceil([cell cellSize].height);
 
             if ( m_indent )
                 cellWidth += m_indent * [m_view levelForRow:row];
@@ -2056,13 +2062,16 @@ void wxCocoaDataViewControl::FitColumnWidthToContent(unsigned int pos)
             }
 
             m_width = wxMax(m_width, cellWidth);
+            m_height = wxMax(m_height, cellHeight);
         }
 
         int GetMaxWidth() const { return m_width; }
+        int GetMaxHeight() const { return m_height; }
         int GetExpanderWidth() const { return m_expander; }
 
     private:
         int m_width;
+        int m_height;
         wxCocoaOutlineView *m_view;
         unsigned m_column;
         int m_indent;
@@ -2074,7 +2083,7 @@ void wxCocoaDataViewControl::FitColumnWidthToContent(unsigned int pos)
 
     if ( [column headerCell] )
     {
-        calculator.UpdateWithWidth([[column headerCell] cellSize].width + 1/*round the float up*/);
+        calculator.UpdateWithWidth(ceil([[column headerCell] cellSize].width));
     }
 
     // The code below deserves some explanation. For very large controls, we
@@ -2144,6 +2153,14 @@ void wxCocoaDataViewControl::FitColumnWidthToContent(unsigned int pos)
         m_expanderWidth = calculator.GetExpanderWidth();
 
     [column setWidth:calculator.GetMaxWidth() + m_expanderWidth];
+
+    if ( !(GetDataViewCtrl()->GetWindowStyle() & wxDV_VARIABLE_LINE_HEIGHT) )
+    {
+        int curHeight = ceil([m_OutlineView rowHeight]);
+        int rowHeight = calculator.GetMaxHeight();
+        if ( rowHeight > curHeight )
+            SetRowHeight(rowHeight);
+    }
 }
 
 //
