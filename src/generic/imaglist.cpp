@@ -20,6 +20,8 @@
     #include "wx/image.h"
 #endif
 
+#include "wx/settings.h"
+
 //-----------------------------------------------------------------------------
 //  wxImageList
 //-----------------------------------------------------------------------------
@@ -42,12 +44,80 @@ int wxGenericImageList::GetImageCount() const
     return static_cast<int>(m_images.size());
 }
 
-bool wxGenericImageList::Create( int width, int height, bool WXUNUSED(mask), int WXUNUSED(initialCount) )
+bool wxGenericImageList::Create( int width, int height, bool mask, int WXUNUSED(initialCount) )
 {
     m_size = wxSize(width, height);
+    m_useMask = mask;
 
     return true;
 }
+
+namespace
+{
+wxBitmap GetImageListBitmap(const wxBitmap& bitmap, bool useMask)
+{
+    wxBitmap bmp(bitmap);
+    if ( useMask )
+    {
+        if ( bmp.GetMask() )
+        {
+            if ( bmp.HasAlpha() )
+            {
+                // We need to remove alpha channel for compatibility with
+                // native-based wxMSW wxImageList where stored images are not allowed
+                // to have both mask and alpha channel.
+#if wxUSE_IMAGE
+                wxImage img = bmp.ConvertToImage();
+                img.ClearAlpha();
+                bmp = img;
+#endif // wxUSE_IMAGE
+            }
+        }
+        else
+        {
+            if ( bmp.HasAlpha() )
+            {
+                // Convert alpha channel to mask.
+#if wxUSE_IMAGE
+                wxImage img = bmp.ConvertToImage();
+                img.ConvertAlphaToMask();
+                bmp = img;
+#endif // wxUSE_IMAGE
+            }
+            else
+            {
+                // Like for wxMSW, use the light grey from standard colour map as transparent colour.
+                wxColour col = wxSystemSettings::GetColour(wxSYS_COLOUR_BTNFACE);
+                bmp.SetMask(new wxMask(bmp, col));
+            }
+        }
+    }
+    else
+    {
+        if ( bmp.GetMask() )
+        {
+            if ( bmp.HasAlpha() )
+            {
+                // TODO: It would be better to blend a mask with existing alpha values.
+                bmp.SetMask(NULL);
+            }
+            else
+            {
+                // Convert a mask to alpha values.
+#if wxUSE_IMAGE
+                wxImage img = bmp.ConvertToImage();
+                img.InitAlpha();
+                bmp = img;
+#else
+                bmp.SetMask(NULL);
+#endif // wxUSE_IMAGE
+            }
+        }
+    }
+
+    return bmp;
+}
+};
 
 int wxGenericImageList::Add( const wxBitmap &bitmap )
 {
@@ -82,7 +152,8 @@ int wxGenericImageList::Add( const wxBitmap &bitmap )
                       "All bitmaps in wxImageList must have the same size" );
     }
 
-    m_images.push_back(bitmap);
+    wxBitmap bmp = GetImageListBitmap(bitmap, m_useMask);
+    m_images.push_back(bmp);
 
     return GetImageCount() - 1;
 }
@@ -141,10 +212,11 @@ wxGenericImageList::Replace(int index,
     if ( !DoGetPtr(index) )
         return false;
 
-    m_images[index] = bitmap;
-
+    wxBitmap bmp(bitmap);
     if ( mask.IsOk() )
-        m_images[index].SetMask(new wxMask(mask));
+        bmp.SetMask(new wxMask(mask));
+
+    m_images[index] = GetImageListBitmap(bmp, m_useMask);
 
     return true;
 }

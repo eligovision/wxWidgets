@@ -308,6 +308,17 @@ public:
     wxRibbonToolBarToolBase* GetToolByPos(size_t pos)const;
 
     /**
+        Returns the opaque pointer for the tool at the given coordinates,
+        which are relative to the toolbar's parent.
+
+        @return an opaque pointer, NULL if is not found.
+
+        @since 3.1.5
+    */
+    virtual wxRibbonToolBarToolBase* GetToolByPos(wxCoord x, wxCoord y)const;
+
+
+    /**
         Returns the number of tools in the toolbar.
 
         @since 2.9.4
@@ -379,6 +390,18 @@ public:
         @since 2.9.4
     */
     virtual int GetToolPos(int tool_id)const;
+
+    /**
+        Returns the tool's rect with coordinates relative to the toolbar's parent,
+        or a default-constructed rect if the tool is not found.
+
+        @param tool_id
+            ID of the tool in question, as passed to AddTool().
+
+        @since 3.1.5
+    */
+    virtual wxRect GetToolRect(int tool_id)const;
+
 
     /**
         Gets the on/off state of a toggle tool.

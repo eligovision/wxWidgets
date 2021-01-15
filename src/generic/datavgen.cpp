@@ -110,6 +110,8 @@ public:
 
     bool IsNone() const { return m_column == SortColumn_None; }
 
+    bool UsesColumn() const { return m_column >= 0; }
+
     int GetColumn() const { return m_column; }
     bool IsAscending() const { return m_ascending; }
 
@@ -1885,9 +1887,10 @@ void wxDataViewTreeNode::Resort(wxDataViewMainWindow* window)
     {
         wxDataViewTreeNodes& nodes = m_branchData->children;
 
-        // Only sort the children if they aren't already sorted by the wanted
-        // criteria.
-        if ( m_branchData->sortOrder != sortOrder )
+        // When sorting by column value, we can skip resorting entirely if the
+        // same sort order was used previously. However we can't do this when
+        // using model-specific sort order, which can change at any time.
+        if ( m_branchData->sortOrder != sortOrder || !sortOrder.UsesColumn() )
         {
             std::sort(m_branchData->children.begin(),
                       m_branchData->children.end(),
@@ -2772,6 +2775,7 @@ void wxDataViewMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
             wxDataViewTreeNode *node = NULL;
             wxDataViewItem dataitem;
             const int line_height = GetLineHeight(item);
+            bool hasValue = true;
 
             if (!IsVirtualList())
             {
@@ -2784,12 +2788,9 @@ void wxDataViewMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
 
                 dataitem = node->GetItem();
 
-                // Skip al columns  that do not have values
                 if ( !model->HasValue(dataitem, col->GetModelColumn()) )
-                {
-                    cell_rect.y += line_height;
-                    continue;
-                }
+                    hasValue = false;
+
             }
             else
             {
@@ -2806,7 +2807,8 @@ void wxDataViewMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
                 state |= wxDATAVIEW_CELL_SELECTED;
 
             cell->SetState(state);
-            cell->PrepareForItem(model, dataitem, col->GetModelColumn());
+            if (hasValue)
+                cell->PrepareForItem(model, dataitem, col->GetModelColumn());
 
             // draw the background
             if ( !selected )
@@ -2887,7 +2889,8 @@ void wxDataViewMainWindow::OnPaint( wxPaintEvent &WXUNUSED(event) )
             //       make its own renderer and thus we cannot be sure of that.
             wxDCClipper clip(dc, item_rect);
 
-            cell->WXCallRender(item_rect, &dc, state);
+            if (hasValue)
+                cell->WXCallRender(item_rect, &dc, state);
 
             cell_rect.y += line_height;
         }
@@ -5930,22 +5933,27 @@ public:
 
     virtual void UpdateWithRow(int row) wxOVERRIDE
     {
-        int indent = 0;
+        int width = 0;
         wxDataViewItem item;
 
         if ( m_isExpanderCol )
         {
             wxDataViewTreeNode *node = m_clientArea->GetTreeNodeByRow(row);
             item = node->GetItem();
-            indent = m_dvc->GetIndent() * node->GetIndentLevel() + m_expanderSize;
+            width = m_dvc->GetIndent() * node->GetIndentLevel() + m_expanderSize;
         }
         else
         {
             item = m_clientArea->GetItemByRow(row);
         }
 
-        m_renderer->PrepareForItem(m_model, item, GetColumn());
-        UpdateWithWidth(m_renderer->GetSize().x + indent);
+        if ( m_model->HasValue(item, GetColumn()) )
+        {
+            m_renderer->PrepareForItem(m_model, item, GetColumn());
+            width += m_renderer->GetSize().x;
+        }
+
+        UpdateWithWidth(width);
     }
 
 private:
