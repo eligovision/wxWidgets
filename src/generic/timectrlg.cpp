@@ -72,6 +72,7 @@ public:
         m_btn = new wxSpinButton(ctrl, wxID_ANY,
                                  wxDefaultPosition, wxDefaultSize,
                                  wxSP_VERTICAL | wxSP_WRAP);
+        m_btn->SetCanFocus(false);
 
         m_currentField = Field_Hour;
         m_isFirstDigit = true;
@@ -155,7 +156,7 @@ private:
     // Event handlers for various events in our controls.
     void OnTextSetFocus(wxFocusEvent& event)
     {
-        HighlightCurrentField();
+        CallAfter(&wxTimePickerGenericImpl::HighlightCurrentField);
 
         event.Skip();
     }
@@ -248,6 +249,9 @@ private:
                     }
                 }
                 break;
+            case WXK_TAB:
+                event.Skip();
+                break;
 
             // Do not skip the other events, just consume them to prevent the
             // user from editing the text directly.
@@ -256,6 +260,8 @@ private:
 
     void OnTextClick(wxMouseEvent& event)
     {
+        m_text->SetFocus();
+
         Field field = Field_Max; // Initialize just to suppress warnings.
         long pos;
         switch ( m_text->HitTest(event.GetPosition(), &pos) )
@@ -297,15 +303,18 @@ private:
         }
 
         ChangeCurrentField(field);
+        CallAfter(&wxTimePickerGenericImpl::HighlightCurrentField);
     }
 
     void OnArrowUp(wxSpinEvent& WXUNUSED(event))
     {
+        m_text->SetFocus();
         ChangeCurrentFieldBy1(Dir_Up);
     }
 
     void OnArrowDown(wxSpinEvent& WXUNUSED(event))
     {
+        m_text->SetFocus();
         ChangeCurrentFieldBy1(Dir_Down);
     }
 
@@ -365,8 +374,6 @@ private:
     // Select the currently actively field.
     void HighlightCurrentField()
     {
-        m_text->SetFocus();
-
         const CharRange range = GetFieldRange(m_currentField);
 
         m_text->SetSelection(range.from, range.to);

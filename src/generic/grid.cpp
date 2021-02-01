@@ -158,6 +158,24 @@ wxDEFINE_EVENT( wxEVT_GRID_TABBING, wxGridEvent );
 // implementation
 // ============================================================================
 
+namespace
+{
+
+// Helper function for consistent cell span determination based on cell size.
+wxGrid::CellSpan GetCellSpan(int numRows, int numCols)
+{
+    if ( numRows == 1 && numCols == 1 )
+        return wxGrid::CellSpan_None; // just a normal cell
+
+    if ( numRows < 0 || numCols < 0 )
+        return wxGrid::CellSpan_Inside; // covered by a multi-span cell
+
+    // this cell spans multiple cells to its right/bottom
+    return wxGrid::CellSpan_Main;
+}
+
+} // anonymous namespace
+
 wxIMPLEMENT_ABSTRACT_CLASS(wxGridCellEditorEvtHandler, wxEvtHandler);
 
 wxBEGIN_EVENT_TABLE( wxGridCellEditorEvtHandler, wxEvtHandler )
@@ -295,7 +313,7 @@ void wxGridRowHeaderRendererDefault::DrawBorder(const wxGrid& grid,
                                                 wxDC& dc,
                                                 wxRect& rect) const
 {
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW)));
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DDKSHADOW)));
     dc.DrawLine(rect.GetRight(), rect.GetTop(),
                 rect.GetRight(), rect.GetBottom());
 
@@ -314,7 +332,7 @@ void wxGridRowHeaderRendererDefault::DrawBorder(const wxGrid& grid,
         ofs = 1;
     }
 
-    dc.SetPen(*wxWHITE_PEN);
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)));
     dc.DrawLine(rect.GetLeft() + ofs, rect.GetTop(),
                 rect.GetLeft() + ofs, rect.GetBottom());
     dc.DrawLine(rect.GetLeft() + ofs, rect.GetTop(),
@@ -327,7 +345,7 @@ void wxGridColumnHeaderRendererDefault::DrawBorder(const wxGrid& grid,
                                                    wxDC& dc,
                                                    wxRect& rect) const
 {
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW)));
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DDKSHADOW)));
     dc.DrawLine(rect.GetRight(), rect.GetTop(),
                 rect.GetRight(), rect.GetBottom());
     dc.DrawLine(rect.GetLeft(), rect.GetBottom(),
@@ -343,7 +361,7 @@ void wxGridColumnHeaderRendererDefault::DrawBorder(const wxGrid& grid,
         ofs = 1;
     }
 
-    dc.SetPen(*wxWHITE_PEN);
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)));
     dc.DrawLine(rect.GetLeft(), rect.GetTop() + ofs,
                 rect.GetLeft(), rect.GetBottom());
     dc.DrawLine(rect.GetLeft(), rect.GetTop() + ofs,
@@ -356,7 +374,7 @@ void wxGridCornerHeaderRendererDefault::DrawBorder(const wxGrid& grid,
                                                    wxDC& dc,
                                                    wxRect& rect) const
 {
-    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DSHADOW)));
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DDKSHADOW)));
     dc.DrawLine(rect.GetRight() - 1, rect.GetBottom() - 1,
                 rect.GetRight() - 1, rect.GetTop());
     dc.DrawLine(rect.GetRight() - 1, rect.GetBottom() - 1,
@@ -375,7 +393,7 @@ void wxGridCornerHeaderRendererDefault::DrawBorder(const wxGrid& grid,
         ofs = 1;
     }
 
-    dc.SetPen(*wxWHITE_PEN);
+    dc.SetPen(wxPen(wxSystemSettings::GetColour(wxSYS_COLOUR_3DLIGHT)));
     dc.DrawLine(rect.GetLeft() + 1, rect.GetTop() + ofs,
                 rect.GetRight() - 1, rect.GetTop() + ofs);
     dc.DrawLine(rect.GetLeft() + ofs, rect.GetTop() + ofs,
@@ -2848,10 +2866,14 @@ void wxGrid::Init()
     m_gridLinesEnabled = true;
     m_gridLinesClipHorz =
     m_gridLinesClipVert = true;
-    m_cellHighlightColour = *wxBLACK;
+    m_cellHighlightColour = wxSystemSettings::GetColour(wxSYS_COLOUR_HIGHLIGHTTEXT);
     m_cellHighlightPenWidth = 2;
     m_cellHighlightROPenWidth = 1;
-    m_gridFrozenBorderColour = *wxBLACK;
+    if ( wxSystemSettings::GetAppearance().IsDark() )
+        m_gridFrozenBorderColour = *wxWHITE;
+    else
+        m_gridFrozenBorderColour = *wxBLACK;
+
     m_gridFrozenBorderPenWidth = 2;
 
     m_canDragColMove = false;
@@ -6213,7 +6235,15 @@ void wxGrid::DrawGridCellArea( wxDC& dc, const wxGridCellCoordsArray& cells )
                 {
                     if (!m_table->IsEmptyCell(row + l, j))
                     {
-                        if ( GetCellAttrPtr(row + l, j)->CanOverflow() )
+                        wxGridCellAttrPtr attr = GetCellAttrPtr(row + l, j);
+                        int numRows, numCols;
+                        attr->GetSize(&numRows, &numCols);
+                        if ( GetCellSpan(numRows, numCols)
+                                 == wxGrid::CellSpan_Inside )
+                            // As above: don't bother drawing inside cells.
+                            continue;
+
+                        if ( attr->CanOverflow() )
                         {
                             wxGridCellCoords cell(row + l, j);
                             bool marked = false;
@@ -9116,14 +9146,7 @@ wxGrid::GetCellSize( int row, int col, int *num_rows, int *num_cols ) const
 {
     GetCellAttrPtr(row, col)->GetSize( num_rows, num_cols );
 
-    if ( *num_rows == 1 && *num_cols == 1 )
-        return CellSpan_None; // just a normal cell
-
-    if ( *num_rows < 0 || *num_cols < 0 )
-        return CellSpan_Inside; // covered by a multi-span cell
-
-    // this cell spans multiple cells to its right/bottom
-    return CellSpan_Main;
+    return GetCellSpan(*num_rows, *num_cols);
 }
 
 wxGridCellRenderer* wxGrid::GetCellRenderer(int row, int col) const

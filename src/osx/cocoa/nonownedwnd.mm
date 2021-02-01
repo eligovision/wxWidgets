@@ -335,8 +335,20 @@ extern int wxOSXGetIdFromSelector(SEL action );
     return self;
 }
 
-- (BOOL) triggerMenu:(SEL) action
+- (BOOL) triggerMenu:(SEL) action sender:(id)sender
 {
+    // feed back into menu item, if it is ours
+    if ( [sender isKindOfClass:wxNSMenuItem.class] )
+    {
+        wxNSMenuItem* nsMenuItem = (wxNSMenuItem*) sender;
+        wxMenuItemImpl* impl = [nsMenuItem implementation];
+        if ( impl )
+        {
+            wxMenuItem* menuitem = impl->GetWXPeer();
+            return menuitem->GetMenu()->HandleCommandProcess(menuitem);
+        }
+    }
+    // otherwise feed back command into common menubar
     wxMenuBar* mbar = wxMenuBar::MacGetInstalledMenuBar();
     if ( mbar )
     {
@@ -369,43 +381,43 @@ extern int wxOSXGetIdFromSelector(SEL action );
 - (void)undo:(id)sender 
 {
     wxUnusedVar(sender);
-    [self triggerMenu:_cmd];
+    [self triggerMenu:_cmd sender:sender];
 }
 
 - (void)redo:(id)sender 
 {
     wxUnusedVar(sender);
-    [self triggerMenu:_cmd];
+    [self triggerMenu:_cmd sender:sender];
 }
 
 - (void)cut:(id)sender 
 {
     wxUnusedVar(sender);
-    [self triggerMenu:_cmd];
+    [self triggerMenu:_cmd sender:sender];
 }
 
 - (void)copy:(id)sender
 {
     wxUnusedVar(sender);
-    [self triggerMenu:_cmd];
+    [self triggerMenu:_cmd sender:sender];
 }
 
 - (void)paste:(id)sender
 {
     wxUnusedVar(sender);
-    [self triggerMenu:_cmd];
+    [self triggerMenu:_cmd sender:sender];
 }
 
 - (void)delete:(id)sender 
 {
     wxUnusedVar(sender);
-    [self triggerMenu:_cmd];
+    [self triggerMenu:_cmd sender:sender];
 }
 
 - (void)selectAll:(id)sender 
 {
     wxUnusedVar(sender);
-    [self triggerMenu:_cmd];
+    [self triggerMenu:_cmd sender:sender];
 }
 
 - (void)windowDidMiniaturize:(NSNotification *)notification
@@ -1286,6 +1298,12 @@ bool wxNonOwnedWindowCocoaImpl::IsModified() const
 void wxNonOwnedWindowCocoaImpl::SetRepresentedFilename(const wxString& filename)
 {
     [m_macWindow setRepresentedFilename:wxCFStringRef(filename).AsNSString()];
+}
+
+void wxNonOwnedWindowCocoaImpl::SetBottomBorderThickness(int thickness)
+{
+    [m_macWindow setAutorecalculatesContentBorderThickness:(thickness ? NO : YES) forEdge:NSMinYEdge];
+    [m_macWindow setContentBorderThickness:thickness forEdge:NSMinYEdge];
 }
 
 void wxNonOwnedWindowCocoaImpl::RestoreWindowLevel()

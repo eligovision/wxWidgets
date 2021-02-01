@@ -3130,11 +3130,10 @@ bool wxPropertyGrid::PerformValidation( wxPGProperty* p, wxVariant& pendingValue
 wxStatusBar* wxPropertyGrid::GetStatusBar()
 {
     wxWindow* topWnd = ::wxGetTopLevelParent(this);
-    if ( wxDynamicCast(topWnd, wxFrame) )
+    wxFrame* frame = wxDynamicCast(topWnd, wxFrame);
+    if ( frame )
     {
-        wxFrame* pFrame = wxStaticCast(topWnd, wxFrame);
-        if ( pFrame )
-            return pFrame->GetStatusBar();
+        return frame->GetStatusBar();
     }
     return NULL;
 }
@@ -4456,7 +4455,6 @@ bool wxPropertyGrid::SelectProperty( wxPGPropArg id, bool focus )
 
 bool wxPropertyGrid::DoCollapse( wxPGProperty* p, bool sendEvents )
 {
-    wxPGProperty* pwc = wxStaticCast(p, wxPGProperty);
     wxPGProperty* selected = GetSelection();
 
     // If active editor was inside collapsed section, then disable it
@@ -4469,7 +4467,7 @@ bool wxPropertyGrid::DoCollapse( wxPGProperty* p, bool sendEvents )
     bool prevDontCenterSplitter = m_pState->m_dontCenterSplitter;
     m_pState->m_dontCenterSplitter = true;
 
-    bool res = m_pState->DoCollapse(pwc);
+    bool res = m_pState->DoCollapse(p);
 
     if ( res )
     {
@@ -5735,8 +5733,12 @@ void wxPropertyGrid::HandleKeyEvent( wxKeyEvent &event, bool fromChild )
 
         if ( action == wxPG_ACTION_EDIT && !editorFocused )
         {
-            DoSelectProperty( p, wxPG_SEL_FOCUS );
-            wasHandled = true;
+            // Mark as handled only for editable property
+            if ( !p->IsCategory() && p->IsEnabled() && !p->HasFlag(wxPG_PROP_READONLY) )
+            {
+                DoSelectProperty( p, wxPG_SEL_FOCUS );
+                wasHandled = true;
+            }
         }
 
         // Travel and expand/collapse
@@ -5776,10 +5778,10 @@ void wxPropertyGrid::HandleKeyEvent( wxKeyEvent &event, bool fromChild )
                 int selFlags = 0;
                 int reopenLabelEditorCol = -1;
 
-                if ( editorFocused )
+                if ( action == wxPG_ACTION_EDIT )
                 {
-                    // If editor was focused, then make the next editor
-                    // focused as well
+                    // Make the next editor focused as well
+                    // if we are actually going to edit the property.
                     selFlags |= wxPG_SEL_FOCUS;
                 }
                 else

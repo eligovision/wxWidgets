@@ -100,6 +100,14 @@ TEST_CASE("ImageList:WithMask", "[imagelist][withmask]")
         CHECK(bmp2.GetMask() != NULL);
         CHECK(bmp2.GetWidth() == 32);
         CHECK(bmp2.GetHeight() == 32);
+
+        idx = il.Add(bmpRGB, *wxRED);
+        CHECK(il.GetImageCount() == 3);
+        wxBitmap bmp3 = il.GetBitmap(idx);
+        CHECK(bmp3.HasAlpha() == false);
+        CHECK(bmp3.GetMask() != NULL);
+        CHECK(bmp3.GetWidth() == 32);
+        CHECK(bmp3.GetHeight() == 32);
     }
 
     SECTION("Add RGBA image to list")
@@ -120,6 +128,14 @@ TEST_CASE("ImageList:WithMask", "[imagelist][withmask]")
         CHECK(bmp2.GetMask() != NULL);
         CHECK(bmp2.GetWidth() == 32);
         CHECK(bmp2.GetHeight() == 32);
+
+        idx = il.Add(bmpRGBA, *wxRED);
+        CHECK(il.GetImageCount() == 3);
+        wxBitmap bmp3 = il.GetBitmap(idx);
+        CHECK(bmp3.HasAlpha() == false);
+        CHECK(bmp3.GetMask() != NULL);
+        CHECK(bmp3.GetWidth() == 32);
+        CHECK(bmp3.GetHeight() == 32);
     }
 
     SECTION("Add icon to list")
@@ -178,6 +194,243 @@ TEST_CASE("ImageList:WithMask", "[imagelist][withmask]")
         CHECK(bmp2.GetMask() != NULL);
         CHECK(bmp2.GetWidth() == 32);
         CHECK(bmp2.GetHeight() == 32);
+    }
+
+    SECTION("Add images with incompatible sizes")
+    {
+        il.RemoveAll();
+        wxSize sz = il.GetSize();
+
+        wxBitmap bmpSmallerW(sz.GetWidth() / 2, sz.GetHeight(), 24);
+        {
+            wxMemoryDC mdc(bmpSmallerW);
+            mdc.SetBackground(*wxBLUE_BRUSH);
+            mdc.Clear();
+        }
+        REQUIRE(bmpSmallerW.IsOk());
+
+        wxBitmap bmpSmallerH(sz.GetWidth(), sz.GetHeight() / 2, 24);
+        {
+            wxMemoryDC mdc(bmpSmallerH);
+            mdc.SetBackground(*wxBLUE_BRUSH);
+            mdc.Clear();
+        }
+        REQUIRE(bmpSmallerH.IsOk());
+
+        wxBitmap bmpSmallerWH(sz.GetWidth() / 2, sz.GetHeight() / 2, 24);
+        {
+            wxMemoryDC mdc(bmpSmallerWH);
+            mdc.SetBackground(*wxBLUE_BRUSH);
+            mdc.Clear();
+        }
+        REQUIRE(bmpSmallerWH.IsOk());
+
+        wxBitmap bmpBiggerW(sz.GetWidth() * 3 / 2, sz.GetHeight(), 24);
+        {
+            wxMemoryDC mdc(bmpBiggerW);
+            mdc.SetBackground(*wxBLUE_BRUSH);
+            mdc.Clear();
+        }
+        REQUIRE(bmpBiggerW.IsOk());
+
+        wxBitmap bmpBiggerW2x(sz.GetWidth() * 2, sz.GetHeight(), 24);
+        {
+            wxMemoryDC mdc(bmpBiggerW2x);
+            mdc.SetBackground(*wxBLUE_BRUSH);
+            mdc.Clear();
+        }
+        REQUIRE(bmpBiggerW2x.IsOk());
+
+        wxBitmap bmpBiggerH(sz.GetWidth(), sz.GetHeight() * 3 / 2, 24);
+        {
+            wxMemoryDC mdc(bmpBiggerH);
+            mdc.SetBackground(*wxBLUE_BRUSH);
+            mdc.Clear();
+        }
+        REQUIRE(bmpBiggerH.IsOk());
+
+        wxBitmap bmpBiggerH2x(sz.GetWidth(), sz.GetHeight() * 2, 24);
+        {
+            wxMemoryDC mdc(bmpBiggerH2x);
+            mdc.SetBackground(*wxBLUE_BRUSH);
+            mdc.Clear();
+        }
+        REQUIRE(bmpBiggerH2x.IsOk());
+
+        wxBitmap bmpBiggerWH(sz.GetWidth() * 3 / 2, sz.GetHeight() * 3 / 2, 24);
+        {
+            wxMemoryDC mdc(bmpBiggerWH);
+            mdc.SetBackground(*wxBLUE_BRUSH);
+            mdc.Clear();
+        }
+        REQUIRE(bmpBiggerWH.IsOk());
+
+        wxBitmap bmpBiggerWH2x(sz.GetWidth() * 2, sz.GetHeight() * 2, 24);
+        {
+            wxMemoryDC mdc(bmpBiggerWH2x);
+            mdc.SetBackground(*wxBLUE_BRUSH);
+            mdc.Clear();
+        }
+        REQUIRE(bmpBiggerWH2x.IsOk());
+
+        // Adding
+        int cnt = il.GetImageCount();
+        int idx = il.Add(bmpSmallerW);
+        CHECK(idx == -1);
+        CHECK(il.GetImageCount() == cnt);
+
+        cnt = il.GetImageCount();
+        idx = il.Add(bmpSmallerH);
+        CHECK(idx >= 0);
+        CHECK(il.GetImageCount() == cnt + 1);
+        wxBitmap bmp = il.GetBitmap(idx);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        idx = il.Add(bmpSmallerWH);
+        CHECK(idx == -1);
+        CHECK(il.GetImageCount() == cnt);
+
+        cnt = il.GetImageCount();
+        idx = il.Add(bmpBiggerW);
+        CHECK(idx >= 0);
+        CHECK(il.GetImageCount() == cnt + 1);
+        bmp = il.GetBitmap(idx);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        idx = il.Add(bmpBiggerW2x);
+        CHECK(idx >= 0);
+        CHECK(il.GetImageCount() == cnt + 2);
+        bmp = il.GetBitmap(idx);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        idx = il.Add(bmpBiggerH);
+        CHECK(idx >= 0);
+        CHECK(il.GetImageCount() == cnt + 1);
+        bmp = il.GetBitmap(idx);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        idx = il.Add(bmpBiggerH2x);
+        CHECK(idx >= 0);
+        CHECK(il.GetImageCount() == cnt + 1);
+        bmp = il.GetBitmap(idx);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        idx = il.Add(bmpBiggerWH);
+        CHECK(idx >= 0);
+        CHECK(il.GetImageCount() == cnt + 1);
+        bmp = il.GetBitmap(idx);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        idx = il.Add(bmpBiggerWH2x);
+        CHECK(idx >= 0);
+        CHECK(il.GetImageCount() == cnt + 2);
+        bmp = il.GetBitmap(idx);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        // Replacing
+        il.RemoveAll();
+
+        cnt = il.GetImageCount();
+        bool ok = il.Replace(0, bmpRGBA);
+        CHECK(ok == false);
+        CHECK(il.GetImageCount() == cnt);
+
+        // List with 1 image
+        idx = il.Add(bmpRGB);
+        CHECK(idx >= 0);
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpRGBA);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpSmallerW);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpSmallerH);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpSmallerWH);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpBiggerW);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpBiggerW2x);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpBiggerH);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpBiggerH2x);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpBiggerWH);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
+
+        cnt = il.GetImageCount();
+        ok = il.Replace(0, bmpBiggerWH2x);
+        CHECK(ok == true);
+        CHECK(il.GetImageCount() == cnt);
+        bmp = il.GetBitmap(0);
+        CHECK(bmp.GetWidth() == sz.GetWidth());
+        CHECK(bmp.GetHeight() == sz.GetHeight());
     }
 }
 
@@ -257,6 +510,14 @@ TEST_CASE("ImageList:NoMask", "[imagelist][nomask]")
         CHECK(bmp2.GetMask() == NULL);
         CHECK(bmp2.GetWidth() == 32);
         CHECK(bmp2.GetHeight() == 32);
+
+        idx = il.Add(bmpRGB, *wxRED);
+        CHECK(il.GetImageCount() == 3);
+        wxBitmap bmp3 = il.GetBitmap(idx);
+        CHECK(bmp3.HasAlpha() == true);
+        CHECK(bmp3.GetMask() == NULL);
+        CHECK(bmp3.GetWidth() == 32);
+        CHECK(bmp3.GetHeight() == 32);
     }
 
     SECTION("Add RGBA image to list")
@@ -277,6 +538,14 @@ TEST_CASE("ImageList:NoMask", "[imagelist][nomask]")
         CHECK(bmp2.GetMask() == NULL);
         CHECK(bmp2.GetWidth() == 32);
         CHECK(bmp2.GetHeight() == 32);
+
+        idx = il.Add(bmpRGBA, *wxRED);
+        CHECK(il.GetImageCount() == 3);
+        wxBitmap bmp3 = il.GetBitmap(idx);
+        CHECK(bmp3.HasAlpha() == true);
+        CHECK(bmp3.GetMask() == NULL);
+        CHECK(bmp3.GetWidth() == 32);
+        CHECK(bmp3.GetHeight() == 32);
     }
 
     SECTION("Add icon to list")
