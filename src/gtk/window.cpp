@@ -1023,7 +1023,11 @@ wxTranslateGTKKeyEventToWx(wxKeyEvent& event,
             }
 
 #ifdef GDK_WINDOWING_X11
-            if (GDK_IS_X11_DISPLAY(gdk_window_get_display(gdk_event->window)))
+#ifdef __WXGTK3__
+            if (strcmp("GdkX11Window", g_type_name(G_TYPE_FROM_INSTANCE(gdk_event->window))) == 0)
+#else
+            if (true)
+#endif
             {
                 // we want to always get the same key code when the same key is
                 // pressed regardless of the state of the modifiers, i.e. on a
@@ -2463,7 +2467,7 @@ wxWindow *wxGetActiveWindow()
 
 // Under Unix this is implemented using X11 functions in utilsx11.cpp but we
 // need to have this function under Windows too, so provide at least a stub.
-#ifndef GDK_WINDOWING_X11
+#ifdef GDK_WINDOWING_WIN32
 bool wxGetKeyState(wxKeyCode WXUNUSED(key))
 {
     wxFAIL_MSG(wxS("Not implemented under Windows"));
