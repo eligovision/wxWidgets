@@ -67,10 +67,12 @@ wxWebViewEdgeImpl::~wxWebViewEdgeImpl()
     if (m_webView)
     {
         m_webView->remove_NavigationCompleted(m_navigationCompletedToken);
+        m_webView->remove_SourceChanged(m_sourceChangedToken);
         m_webView->remove_NavigationStarting(m_navigationStartingToken);
         m_webView->remove_NewWindowRequested(m_newWindowRequestedToken);
         m_webView->remove_DocumentTitleChanged(m_documentTitleChangedToken);
         m_webView->remove_ContentLoading(m_contentLoadingToken);
+        m_webView->remove_ContainsFullScreenElementChanged(m_containsFullScreenElementChangedToken);
     }
 }
 
@@ -175,10 +177,27 @@ HRESULT wxWebViewEdgeImpl::OnNavigationStarting(ICoreWebView2* WXUNUSED(sender),
     return S_OK;
 }
 
+HRESULT wxWebViewEdgeImpl::OnSourceChanged(ICoreWebView2 * WXUNUSED(sender), ICoreWebView2SourceChangedEventArgs * args)
+{
+    BOOL isNewDocument;
+    if (SUCCEEDED(args->get_IsNewDocument(&isNewDocument)) && !isNewDocument)
+    {
+        // navigation within the current document, send apropriate events
+        wxWebViewEvent event(wxEVT_WEBVIEW_NAVIGATING, m_ctrl->GetId(), m_ctrl->GetCurrentURL(), wxString());
+        event.SetEventObject(m_ctrl);
+        m_ctrl->HandleWindowEvent(event);
+        OnNavigationCompleted(NULL, NULL);
+        OnContentLoading(NULL, NULL);
+    }
+    return S_OK;
+}
+
 HRESULT wxWebViewEdgeImpl::OnNavigationCompleted(ICoreWebView2* WXUNUSED(sender), ICoreWebView2NavigationCompletedEventArgs* args)
 {
     BOOL isSuccess;
-    if (FAILED(args->get_IsSuccess(&isSuccess)))
+    if (!args)
+        isSuccess = true;
+    else if (FAILED(args->get_IsSuccess(&isSuccess)))
         isSuccess = false;
     m_isBusy = false;
     wxString uri = m_ctrl->GetCurrentURL();
@@ -186,6 +205,7 @@ HRESULT wxWebViewEdgeImpl::OnNavigationCompleted(ICoreWebView2* WXUNUSED(sender)
     if (!isSuccess)
     {
         COREWEBVIEW2_WEB_ERROR_STATUS status;
+        bool ignoreStatus = false;
 
         wxWebViewEvent event(wxEVT_WEBVIEW_ERROR, m_ctrl->GetId(), uri, wxString());
         event.SetEventObject(m_ctrl);
@@ -208,12 +228,16 @@ HRESULT wxWebViewEdgeImpl::OnNavigationCompleted(ICoreWebView2* WXUNUSED(sender)
                 WX_ERROR2_CASE(COREWEBVIEW2_WEB_ERROR_STATUS_DISCONNECTED, wxWEBVIEW_NAV_ERR_CONNECTION)
                 WX_ERROR2_CASE(COREWEBVIEW2_WEB_ERROR_STATUS_CANNOT_CONNECT, wxWEBVIEW_NAV_ERR_CONNECTION)
                 WX_ERROR2_CASE(COREWEBVIEW2_WEB_ERROR_STATUS_HOST_NAME_NOT_RESOLVED, wxWEBVIEW_NAV_ERR_CONNECTION)
-                WX_ERROR2_CASE(COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED, wxWEBVIEW_NAV_ERR_USER_CANCELLED)
                 WX_ERROR2_CASE(COREWEBVIEW2_WEB_ERROR_STATUS_REDIRECT_FAILED, wxWEBVIEW_NAV_ERR_OTHER)
                 WX_ERROR2_CASE(COREWEBVIEW2_WEB_ERROR_STATUS_UNEXPECTED_ERROR, wxWEBVIEW_NAV_ERR_OTHER)
+            case COREWEBVIEW2_WEB_ERROR_STATUS_OPERATION_CANCELED:
+                // This status is triggered by vetoing a wxEVT_WEBVIEW_NAVIGATING event
+                ignoreStatus = true;
+                break;
             }
         }
-        m_ctrl->HandleWindowEvent(event);
+        if (!ignoreStatus)
+            m_ctrl->HandleWindowEvent(event);
     }
     else
     {
@@ -278,6 +302,22 @@ HRESULT wxWebViewEdgeImpl::OnContentLoading(ICoreWebView2* WXUNUSED(sender), ICo
     return S_OK;
 }
 
+HRESULT wxWebViewEdgeImpl::OnContainsFullScreenElementChanged(ICoreWebView2* WXUNUSED(sender), IUnknown* WXUNUSED(args))
+{
+    BOOL containsFullscreenEvent;
+    HRESULT hr = m_webView->get_ContainsFullScreenElement(&containsFullscreenEvent);
+    if (FAILED(hr))
+        return hr;
+
+    wxWebViewEvent event(wxEVT_WEBVIEW_FULLSCREEN_CHANGED, m_ctrl->GetId(),
+        m_ctrl->GetCurrentURL(), wxString());
+    event.SetEventObject(m_ctrl);
+    event.SetInt(containsFullscreenEvent);
+    m_ctrl->HandleWindowEvent(event);
+
+    return S_OK;
+}
+
 HRESULT wxWebViewEdgeImpl::OnWebViewCreated(HRESULT result, ICoreWebView2Controller* webViewController)
 {
     if (FAILED(result))
@@ -296,12 +336,17 @@ HRESULT wxWebViewEdgeImpl::OnWebViewCreated(HRESULT result, ICoreWebView2Control
 
     m_initialized = true;
     UpdateBounds();
+    m_webViewController->put_IsVisible(true);
 
     // Connect and handle the various WebView events
     m_webView->add_NavigationStarting(
         Callback<ICoreWebView2NavigationStartingEventHandler>(
             this, &wxWebViewEdgeImpl::OnNavigationStarting).Get(),
         &m_navigationStartingToken);
+    m_webView->add_SourceChanged(
+        Callback<ICoreWebView2SourceChangedEventHandler>(
+            this, &wxWebViewEdgeImpl::OnSourceChanged).Get(),
+        &m_sourceChangedToken);
     m_webView->add_NavigationCompleted(
         Callback<ICoreWebView2NavigationCompletedEventHandler>(
             this, &wxWebViewEdgeImpl::OnNavigationCompleted).Get(),
@@ -318,6 +363,10 @@ HRESULT wxWebViewEdgeImpl::OnWebViewCreated(HRESULT result, ICoreWebView2Control
         Callback<ICoreWebView2ContentLoadingEventHandler>(
             this, &wxWebViewEdgeImpl::OnContentLoading).Get(),
         &m_contentLoadingToken);
+    m_webView->add_ContainsFullScreenElementChanged(
+        Callback<ICoreWebView2ContainsFullScreenElementChangedEventHandler>(
+            this, &wxWebViewEdgeImpl::OnContainsFullScreenElementChanged).Get(),
+        &m_containsFullScreenElementChangedToken);
 
     if (m_pendingContextMenuEnabled != -1)
     {
@@ -362,7 +411,9 @@ ICoreWebView2Settings* wxWebViewEdgeImpl::GetSettings()
 
 wxWebViewEdge::~wxWebViewEdge()
 {
-    Unbind(wxEVT_SHOW, &wxWebViewEdge::OnShow, this);
+    wxWindow* topLevelParent = wxGetTopLevelParent(this);
+    if (topLevelParent)
+        topLevelParent->Unbind(wxEVT_ICONIZE, &wxWebViewEdge::OnTopLevelParentIconized, this);
     delete m_impl;
 }
 
@@ -387,7 +438,9 @@ bool wxWebViewEdge::Create(wxWindow* parent,
     if (!m_impl->Create())
         return false;
     Bind(wxEVT_SIZE, &wxWebViewEdge::OnSize, this);
-    Bind(wxEVT_SHOW, &wxWebViewEdge::OnShow, this);
+    wxWindow* topLevelParent = wxGetTopLevelParent(this);
+    if (topLevelParent)
+        topLevelParent->Bind(wxEVT_ICONIZE, &wxWebViewEdge::OnTopLevelParentIconized, this);
 
     LoadURL(url);
     return true;
@@ -399,10 +452,10 @@ void wxWebViewEdge::OnSize(wxSizeEvent& event)
     event.Skip();
 }
 
-void wxWebViewEdge::OnShow(wxShowEvent& event)
+void wxWebViewEdge::OnTopLevelParentIconized(wxIconizeEvent& event)
 {
-    if (m_impl->m_webView)
-        m_impl->m_webViewController->put_IsVisible(event.IsShown());
+    if (m_impl && m_impl->m_webViewController)
+        m_impl->m_webViewController->put_IsVisible(!event.IsIconized());
     event.Skip();
 }
 

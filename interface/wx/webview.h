@@ -317,16 +317,18 @@ public:
     <a href="https://docs.microsoft.com/en-us/microsoft-edge/hosting/webview2">Edge WebView2</a>.
     It is available for Windows 7 and newer.
     The following features are currently unsupported with this backend:
-    virtual filesystems, custom urls, find.
+    virtual filesystems, custom urls.
 
     This backend is not enabled by default, to build it follow these steps:
     - Visual Studio 2015, or newer, is required
-    - Download the <a href="https://aka.ms/webviewnuget">WebView2 SDK</a>
-      nuget package (Version 1.0.622.22 or newer)
-    - Extract the package (it's a zip archive) to @c wxWidgets/3rdparty/webview2
-      (you should have @c 3rdparty/webview2/build/native/include/WebView2.h
-      file after unpacking it)
-    - Enable @c wxUSE_WEBVIEW_EDGE in CMake or @c setup.h
+    - With CMake just enable @c wxUSE_WEBVIEW_EDGE
+    - When not using CMake:
+        - Download the <a href="https://aka.ms/webviewnuget">WebView2 SDK</a>
+        nuget package (Version 1.0.622.22 or newer)
+        - Extract the package (it's a zip archive) to @c wxWidgets/3rdparty/webview2
+        (you should have @c 3rdparty/webview2/build/native/include/WebView2.h
+        file after unpacking it)
+        - Enable @c wxUSE_WEBVIEW_EDGE in @c setup.h
     - Build wxWidgets webview library
     - Copy @c WebView2Loader.dll from the subdirectory corresponding to the
       architecture used (x86 or x64) of @c wxWidgets/3rdparty/webview2/build/
@@ -426,6 +428,11 @@ public:
     @event{EVT_WEBVIEW_TITLE_CHANGED(id, func)}
        Process a @c wxEVT_WEBVIEW_TITLE_CHANGED event, generated when
        the page title changes. Use GetString to get the title.
+    @event{EVT_WEBVIEW_FULL_SCREEN_CHANGED(id, func)}
+       Process a @c EVT_WEBVIEW_FULL_SCREEN_CHANGED event, generated when
+       the page wants to enter or leave fullscreen. Use GetInt to get the status.
+       Currently only implemented for the edge and WebKit2GTK+ backend
+       and is only available in wxWidgets 3.1.5 or later.
     @endEventTable
 
     @since 2.9.3

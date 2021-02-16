@@ -59,6 +59,21 @@
     #define REAL_MIN    FLT_MIN
 #endif // REAL_MIN
 
+// Define colour componenets positions in ARGB structure
+// if it isn't done in GDI+ header(s).
+#ifndef ALPHA_SHIFT
+    #define ALPHA_SHIFT 24
+#endif // ALPHA_SHIFT
+#ifndef RED_SHIFT
+    #define RED_SHIFT   16
+#endif // RED_SHIFT
+#ifndef GREEN_SHIFT
+    #define GREEN_SHIFT 8
+#endif // GREEN_SHIFT
+#ifndef BLUE_SHIFT
+    #define BLUE_SHIFT  0
+#endif // BLUE_SHIFT
+
 namespace
 {
 
@@ -317,6 +332,7 @@ class WXDLLIMPEXP_CORE wxGDIPlusBitmapData : public wxGraphicsBitmapData
 public:
     wxGDIPlusBitmapData( wxGraphicsRenderer* renderer, Bitmap* bitmap );
     wxGDIPlusBitmapData( wxGraphicsRenderer* renderer, const wxBitmap &bmp );
+    wxGDIPlusBitmapData(wxGraphicsRenderer* renderer, const wxImage& img);
     ~wxGDIPlusBitmapData ();
 
     virtual Bitmap* GetGDIPlusBitmap() { return m_bitmap; }
@@ -1294,6 +1310,67 @@ wxGDIPlusBitmapData::wxGDIPlusBitmapData( wxGraphicsRenderer* renderer,
 }
 
 #if wxUSE_IMAGE
+wxGDIPlusBitmapData::wxGDIPlusBitmapData(wxGraphicsRenderer* renderer, const wxImage& img)
+    : wxGraphicsBitmapData(renderer)
+{
+    m_helper = NULL;
+    m_bitmap = new Bitmap(img.GetWidth(), img.GetHeight(), img.HasAlpha() || img.HasMask() ? PixelFormat32bppPARGB : PixelFormat32bppRGB);
+
+    UINT w = m_bitmap->GetWidth();
+    UINT h = m_bitmap->GetHeight();
+    Rect bounds(0, 0, (INT)w, (INT)h);
+    BitmapData bmpData;
+    m_bitmap->LockBits(&bounds, ImageLockModeWrite, PixelFormat32bppARGB, &bmpData);
+
+    const unsigned char* imgRGB = img.GetData();
+    const unsigned char* imgAlpha = img.GetAlpha();
+    BYTE* pPixLine = reinterpret_cast<BYTE*>(bmpData.Scan0);
+    for ( UINT y = 0; y < h; y++ )
+    {
+        BYTE* pPixByte = pPixLine;
+        for ( UINT x = 0; x < w; x++ )
+        {
+            unsigned char r = *imgRGB++;
+            unsigned char g = *imgRGB++;
+            unsigned char b = *imgRGB++;
+            *pPixByte++ = b;
+            *pPixByte++ = g;
+            *pPixByte++ = r;
+            *pPixByte++ = imgAlpha ? *imgAlpha++ : 255;
+        }
+
+        pPixLine += bmpData.Stride;
+    }
+
+    // If there is a mask, set the alpha bytes in the target buffer to
+   // fully transparent or retain original value
+    if ( img.HasMask() )
+    {
+        unsigned char mr = img.GetMaskRed();
+        unsigned char mg = img.GetMaskGreen();
+        unsigned char mb = img.GetMaskBlue();
+        imgRGB = img.GetData();
+        pPixLine = reinterpret_cast<BYTE*>(bmpData.Scan0);
+        for ( UINT y = 0; y < h; y++ )
+        {
+            BYTE* pPixByte = pPixLine;
+            for ( UINT x = 0; x < w; x++ )
+            {
+                unsigned char r = *imgRGB++;
+                unsigned char g = *imgRGB++;
+                unsigned char b = *imgRGB++;
+                if ( r == mr && g == mg && b == mb )
+                    pPixByte[0] = pPixByte[1] = pPixByte[2] = pPixByte[3] = 0;
+
+                pPixByte += 4;
+            }
+
+            pPixLine += bmpData.Stride;
+        }
+    }
+
+    m_bitmap->UnlockBits(&bmpData);
+}
 
 wxImage wxGDIPlusBitmapData::ConvertToImage() const
 {
@@ -1321,14 +1398,15 @@ wxImage wxGDIPlusBitmapData::ConvertToImage() const
     const BYTE* pixels = static_cast<const BYTE*>(bitmapData.Scan0);
     for( UINT y = 0; y < h; y++ )
     {
+        const ARGB* pixByte = reinterpret_cast<const ARGB*>(pixels);
         for( UINT x = 0; x < w; x++ )
         {
-            ARGB c = reinterpret_cast<const ARGB*>(pixels)[x];
-            *imgRGB++ = (c >> 16) & 0xFF;  // R
-            *imgRGB++ = (c >> 8) & 0xFF;   // G
-            *imgRGB++ = (c >> 0) & 0xFF;   // B
+            ARGB c = *pixByte++;
+            *imgRGB++ = (c >> RED_SHIFT) & 0xFF;   // R
+            *imgRGB++ = (c >> GREEN_SHIFT) & 0xFF; // G
+            *imgRGB++ = (c >> BLUE_SHIFT) & 0xFF;  // B
             if ( imgAlpha )
-                *imgAlpha++ = (c >> 24) & 0xFF;
+                *imgAlpha++ = (c >> ALPHA_SHIFT) & 0xFF;
         }
 
         pixels += bitmapData.Stride;
@@ -2818,12 +2896,6 @@ wxGraphicsBitmap wxGDIPlusRenderer::CreateBitmapFromImage(const wxImage& image)
     ENSURE_LOADED_OR_RETURN(wxNullGraphicsBitmap);
     if ( image.IsOk() )
     {
-        // Notice that we rely on conversion from wxImage to wxBitmap here but
-        // we could probably do it more efficiently by converting from wxImage
-        // to GDI+ Bitmap directly, i.e. copying wxImage pixels to the buffer
-        // returned by Bitmap::LockBits(). However this would require writing
-        // code specific for this task while like this we can reuse existing
-        // code (see also wxGDIPlusBitmapData::ConvertToImage()).
         wxGraphicsBitmap gb;
         gb.SetRefData(new wxGDIPlusBitmapData(this, image));
         return gb;
