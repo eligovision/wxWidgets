@@ -108,6 +108,19 @@ enum wxWebViewNavigationActionFlags
 };
 
 /**
+    Specifies at which place of documents an user script will be inserted.
+
+    @since 3.1.5
+*/
+enum wxWebViewUserScriptInjectionTime
+{
+    /** Insert the code of the user script at the beginning of loaded documents. */
+    wxWEBVIEW_INJECT_AT_DOCUMENT_START,
+    /** Insert the code of the user script at the end of the loaded documents. */
+    wxWEBVIEW_INJECT_AT_DOCUMENT_END
+};
+
+/**
     Internet Explorer emulation modes for wxWebViewIE.
 
     Elements of this enum can be used with wxWebView::MSWSetEmulationLevel().
@@ -292,35 +305,37 @@ public:
     This control may be used to render web (HTML / CSS / javascript) documents.
     It is designed to allow the creation of multiple backends for each port,
     although currently just one is available. It differs from wxHtmlWindow in
-    that each backend is actually a full rendering engine, Trident on MSW and
-    Webkit on macOS and GTK. This allows the correct viewing of complex pages with
+    that each backend is actually a full rendering engine, Internet Explorer or Edge on MSW and
+    WebKit on macOS and GTK. This allows the correct viewing of complex pages with
     javascript and css.
 
     @section descriptions Backend Descriptions
 
-    @par wxWEBVIEW_BACKEND_IE (MSW)
-    @anchor wxWEBVIEW_BACKEND_IE
+    @subsection wxWEBVIEW_BACKEND_IE wxWEBVIEW_BACKEND_IE (MSW)
 
-    The IE backend uses Microsoft's Trident rendering engine, specifically the
-    version used by the locally installed copy of Internet Explorer. As such it
-    is only available for the MSW port. By default recent versions of the
+    The IE backend uses Microsoft's
     <a href="http://msdn.microsoft.com/en-us/library/aa752085%28v=VS.85%29.aspx">WebBrowser</a>
-    control, which this backend uses, emulate Internet Explorer 7. This can be
-    changed with a registry setting by wxWebView::MSWSetEmulationLevel() see
+    control, which depends the locally installed version of Internet Explorer.
+    By default this backend emulates Internet Explorer 7. This can be
+    changed with a registry setting by wxWebViewIE::MSWSetEmulationLevel() see
     <a href="http://msdn.microsoft.com/en-us/library/ee330730%28v=vs.85%29.aspx#browser_emulation">
-    this</a> article for more information. This backend has full support for
-    custom schemes and virtual file systems.
+    this</a> article for more information.
 
-    @par wxWEBVIEW_BACKEND_EDGE (MSW)
+    This backend has full support for custom schemes and virtual file systems.
 
-    The Edge (Chromium) backend uses Microsoft's
+    @note If you plan to display any modern web content you should consider using @ref wxWEBVIEW_BACKEND_EDGE,
+          as Internet Explorer is not supported anymore by Microsoft.
+
+    @subsection wxWEBVIEW_BACKEND_EDGE wxWEBVIEW_BACKEND_EDGE (MSW)
+
+    The Edge backend uses Microsoft's
     <a href="https://docs.microsoft.com/en-us/microsoft-edge/hosting/webview2">Edge WebView2</a>.
     It is available for Windows 7 and newer.
-    The following features are currently unsupported with this backend:
-    virtual filesystems, custom urls.
+
+    This backend does not support custom schemes and virtual file systems.
 
     This backend is not enabled by default, to build it follow these steps:
-    - Visual Studio 2015, or newer, is required
+    - Visual Studio 2015 or newer, or GCC/Clang with c++11 is required
     - With CMake just enable @c wxUSE_WEBVIEW_EDGE
     - When not using CMake:
         - Download the <a href="https://aka.ms/webviewnuget">WebView2 SDK</a>
@@ -339,7 +354,7 @@ public:
     - Make sure to add a note about using the WebView2 SDK to your application
       documentation, as required by its licence
 
-    If enabled and available at runtime edge will be selected as the default
+    If enabled and available at runtime Edge will be selected as the default
     backend. If you require the IE backend use @c wxWEBVIEW_BACKEND_IE when
     using wxWebView::New().
 
@@ -347,32 +362,44 @@ public:
     <a href="https://docs.microsoft.com/en-us/microsoft-edge/webview2/concepts/distribution#fixed-version-distribution-mode">
     fixed version</a> of the WebView2 runtime you must use
     wxWebViewEdge::MSWSetBrowserExecutableDir() to specify its usage before
-    using the edge backend.
+    using the Edge backend.
 
-    @par wxWEBVIEW_WEBKIT (GTK)
+    @subsection wxWEBVIEW_WEBKIT wxWEBVIEW_WEBKIT (GTK)
 
     Under GTK the WebKit backend uses
     <a href="http://webkitgtk.org/">WebKitGTK+</a>. The current minimum version
     required is 1.3.1 which ships by default with Ubuntu Natty and Debian
-    Wheezy and has the package name libwebkitgtk-dev. Custom schemes and
+    Wheezy and has the package name libwebkitgtk-dev.
+
+    Custom schemes and
     virtual files systems are supported under this backend, however embedded
     resources such as images and stylesheets are currently loaded using the
     data:// scheme.
 
-    @par wxWEBVIEW_WEBKIT2 (GTK3)
+    @subsection wxWEBVIEW_WEBKIT2 wxWEBVIEW_WEBKIT2 (GTK3)
 
     Under GTK3 the WebKit2 version of <a href="http://webkitgtk.org/">WebKitGTK+</a>
     is used. In Ubuntu the required package name is libwebkit2gtk-4.0-dev
-    and under Fedora it is webkitgtk4-devel. All wxWEBVIEW_WEBKIT features are
+    and under Fedora it is webkitgtk4-devel.
+
+    All features are
     supported except for clearing and enabling / disabling the history.
 
-    @par wxWEBVIEW_WEBKIT (macOS)
+    @subsection wxWEBVIEW_WEBKIT_MACOS wxWEBVIEW_WEBKIT (macOS)
 
     The macOS WebKit backend uses Apple's
     <a href="https://developer.apple.com/documentation/webkit/wkwebview">WKWebView</a>
-    class. This backend has full support for custom schemes and virtual file
+    class.
+
+    This backend has full support for custom schemes and virtual file
     systems on macOS 10.13+. In order to use handlers two-step creation has to be used
     and RegisterHandler() has to be called before Create().
+
+    Starting with macOS 10.11 and iOS 9 an application cannot create unsecure
+    connections (this includes HTTP and unverified HTTPS). You have to include
+    additional fields in your Info.plist to enable such connections.
+    For further details see the documentation on NSAppTransportSecurity
+    <a target=_new href="https://developer.apple.com/documentation/bundleresources/information_property_list/nsapptransportsecurity">here</a>
 
     @section async Asynchronous Notifications
 
@@ -431,8 +458,12 @@ public:
     @event{EVT_WEBVIEW_FULL_SCREEN_CHANGED(id, func)}
        Process a @c EVT_WEBVIEW_FULL_SCREEN_CHANGED event, generated when
        the page wants to enter or leave fullscreen. Use GetInt to get the status.
-       Currently only implemented for the edge and WebKit2GTK+ backend
+       Not implemented for the IE backend
        and is only available in wxWidgets 3.1.5 or later.
+    @event{EVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED(id, func)}
+        Process a @c wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED event
+        only available in wxWidgets 3.1.5 or later. For usage details see
+        AddScriptMessageHandler().
     @endEventTable
 
     @since 2.9.3
@@ -605,10 +636,48 @@ public:
     /**
         Reload the currently displayed URL.
         @param flags A bit array that may optionally contain reload options.
-        @note The flags are ignored by the edge backend.
+        @note The flags are ignored by the Edge backend.
     */
     virtual void Reload(wxWebViewReloadFlags flags = wxWEBVIEW_RELOAD_DEFAULT) = 0;
 
+    /**
+        Set the editable property of the web control. Enabling allows the user
+        to edit the page even if the @c contenteditable attribute is not set.
+        The exact capabilities vary with the backend being used.
+
+        @note This is not implemented for macOS and the Edge backend.
+    */
+    virtual void SetEditable(bool enable = true) = 0;
+
+    /**
+        Set the displayed page source to the contents of the given string.
+        @param html    The string that contains the HTML data to display.
+        @param baseUrl URL assigned to the HTML data, to be used to resolve
+                    relative paths, for instance.
+        @note When using @c wxWEBVIEW_BACKEND_IE you must wait for the current
+              page to finish loading before calling SetPage(). The baseURL
+              parameter is not used in this backend and the Edge backend.
+    */
+    virtual void SetPage(const wxString& html, const wxString& baseUrl) = 0;
+
+    /**
+        Set the displayed page source to the contents of the given stream.
+        @param html    The stream to read HTML data from.
+        @param baseUrl URL assigned to the HTML data, to be used to resolve
+                    relative paths, for instance.
+    */
+    virtual void SetPage(wxInputStream& html, wxString baseUrl);
+
+    /**
+        Stop the current page loading process, if any.
+        May trigger an error event of type @c wxWEBVIEW_NAV_ERR_USER_CANCELLED.
+        TODO: make @c wxWEBVIEW_NAV_ERR_USER_CANCELLED errors uniform across ports.
+    */
+    virtual void Stop() = 0;
+
+    /**
+        @name Scripting
+    */
     /**
         Runs the given JavaScript code.
 
@@ -670,39 +739,78 @@ public:
     virtual bool RunScript(const wxString& javascript, wxString* output = NULL) const = 0;
 
     /**
-        Set the editable property of the web control. Enabling allows the user
-        to edit the page even if the @c contenteditable attribute is not set.
-        The exact capabilities vary with the backend being used.
+        Add a script message handler with the given name.
 
-        @note This is not implemented on macOS.
+        To use the script message handler from javascript use
+        @c window.<name>.postMessage(<messageBody>) where <name> corresponds the value
+        of the name parameter. The <messageBody> will be available to the application
+        via a @c wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED event.
+
+        Sample C++ code receiving a script message:
+        @code
+            // Install message handler with the name wx_msg
+            m_webView->AddScriptMessageHandler('wx_msg');
+            // Bind handler
+            m_webView->Bind(wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED, [](wxWebViewEvent& evt) {
+                wxLogMessage("Script message received; value = %s, handler = %s", evt.GetString(), evt.GetMessageHandler());
+            });
+        @endcode
+
+        Sample javascript sending a script message:
+        @code
+            // Send sample message body
+            window.wx_msg.postMessage('This is a message body');
+        @endcode
+
+        @param name Name of the message handler that can be used from javascript
+        @return @true if the handler could be added, @false if it could not be added.
+
+        @see RemoveScriptMessageHandler()
+
+        @note The Edge backend only supports a single message handler and
+            the IE backend does not support script message handlers.
+
+        @since 3.1.5
     */
-    virtual void SetEditable(bool enable = true) = 0;
+    virtual bool AddScriptMessageHandler(const wxString& name);
 
     /**
-        Set the displayed page source to the contents of the given string.
-        @param html    The string that contains the HTML data to display.
-        @param baseUrl URL assigned to the HTML data, to be used to resolve
-                    relative paths, for instance.
-        @note When using @c wxWEBVIEW_BACKEND_IE you must wait for the current
-              page to finish loading before calling SetPage(). The baseURL
-              parameter is not used in this backend and the edge backend.
+        Remove a script message handler with the given name that was previously added via
+        AddScriptMessageHandler().
+
+        @return @true if the handler could be removed, @false if it could not be removed.
+
+        @see AddScriptMessageHandler()
+
+        @since 3.1.5
     */
-    virtual void SetPage(const wxString& html, const wxString& baseUrl) = 0;
+    virtual bool RemoveScriptMessageHandler(const wxString& name);
 
     /**
-        Set the displayed page source to the contents of the given stream.
-        @param html    The stream to read HTML data from.
-        @param baseUrl URL assigned to the HTML data, to be used to resolve
-                    relative paths, for instance.
+        Injects the specified script into the webpage’s content.
+
+        @param javascript The javascript code to add.
+        @param injectionTime Specifies when the script will be executed.
+        @return Returns true if the script was added successfully.
+
+        @note Please note that this is unsupported by the IE backend and
+            the Edge backend does only support wxWEBVIEW_INJECT_AT_DOCUMENT_START.
+
+        @see RemoveAllUserScripts()
+
+        @since 3.1.5
     */
-    virtual void SetPage(wxInputStream& html, wxString baseUrl);
+    virtual bool AddUserScript(const wxString& javascript,
+        wxWebViewUserScriptInjectionTime injectionTime = wxWEBVIEW_INJECT_AT_DOCUMENT_START);
 
     /**
-        Stop the current page loading process, if any.
-        May trigger an error event of type @c wxWEBVIEW_NAV_ERR_USER_CANCELLED.
-        TODO: make @c wxWEBVIEW_NAV_ERR_USER_CANCELLED errors uniform across ports.
+        Removes all user scripts from the web view.
+
+        @see AddUserScript()
+
+        @since 3.1.5
     */
-    virtual void Stop() = 0;
+    virtual void RemoveAllUserScripts();
 
     /**
         @name Clipboard
@@ -710,22 +818,16 @@ public:
 
     /**
         Returns @true if the current selection can be copied.
-
-        @note This always returns @c true on the macOS WebKit backend.
     */
     virtual bool CanCopy() const;
 
     /**
         Returns @true if the current selection can be cut.
-
-         @note This always returns @c true on the macOS WebKit backend.
     */
     virtual bool CanCut() const;
 
     /**
         Returns @true if data can be pasted.
-
-        @note This always returns @c true on the macOS WebKit backend.
     */
     virtual bool CanPaste() const;
 
@@ -772,8 +874,9 @@ public:
     /**
         Enable or disable access to dev tools for the user.
 
-        This is currently only implemented for the Edge (Chromium) backend
-        where the dev tools are enabled by default.
+        Dev tools are disabled by default.
+
+        @note This is not implemented for the IE backend.
 
         @since 3.1.4
     */
@@ -785,6 +888,28 @@ public:
         @since 3.1.4
     */
     virtual bool IsAccessToDevToolsEnabled() const;
+
+    /**
+        Specify a custom user agent string for the web view.
+        Returns @true the user agent could be set.
+
+        If your first request should already use the custom user agent
+        please use two step creation and call SetUserAgent() before Create().
+
+        @note This is not implemented for IE. For Edge SetUserAgent()
+            MUST be called before Create().
+
+        @since 3.1.5
+    */
+    virtual bool SetUserAgent(const wxString& userAgent);
+
+    /**
+        Returns the current user agent string for the web view.
+
+        @since 3.1.5
+    */
+    virtual wxString GetUserAgent() const;
+
 
     /**
         @name History
@@ -924,8 +1049,7 @@ public:
               @c wxWEBVIEW_FIND_ENTIRE_WORD or @c wxWEBVIEW_FIND_MATCH_CASE
               are changed, since this will require a new search. To reset the
               search, for example resetting the highlights call the function
-              with an empty search phrase. This always returns @c wxNOT_FOUND
-              on the macOS WebKit backend.
+              with an empty search phrase.
         @since 2.9.5
     */
     virtual long Find(const wxString& text, wxWebViewFindFlags flags = wxWEBVIEW_FIND_DEFAULT);
@@ -1058,6 +1182,29 @@ public:
     static bool MSWSetModernEmulationLevel(bool modernLevel = true);
 };
 
+/**
+    @class wxWebViewEdge
+
+    wxWebView using Edge backend, see @ref wxWEBVIEW_BACKEND_EDGE.
+
+    @onlyfor{wxmsw}
+    @since 3.1.5
+    @library{wxwebview}
+    @category{ctrl,webview}
+    @see wxWebView
+ */
+class wxWebViewEdge : public wxWebView
+{
+public:
+    /**
+        Set path to a fixed version of the WebView2 Edge runtime.
+
+        @param path Path to an extracted fixed version of the WebView2 Edge runtime.
+
+        @since 3.1.5
+    */
+    static void MSWSetBrowserExecutableDir(const wxString& path);
+};
 
 
 /**
@@ -1094,6 +1241,15 @@ public:
     @event{EVT_WEBVIEW_TITLE_CHANGED(id, func)}
        Process a @c wxEVT_WEBVIEW_TITLE_CHANGED event, generated when
        the page title changes. Use GetString to get the title.
+    @event{EVT_WEBVIEW_FULL_SCREEN_CHANGED(id, func)}
+       Process a @c EVT_WEBVIEW_FULL_SCREEN_CHANGED event, generated when
+       the page wants to enter or leave fullscreen. Use GetInt to get the status.
+       Not implemented for the IE backend
+       and is only available in wxWidgets 3.1.5 or later.
+    @event{EVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED(id, func)}
+        Process a @c wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED event
+        only available in wxWidgets 3.1.5 or later. For usage details see
+        wxWebView::AddScriptMessageHandler().
     @endEventTable
 
     @since 2.9.3
@@ -1108,7 +1264,8 @@ public:
     wxWebViewEvent();
     wxWebViewEvent(wxEventType type, int id, const wxString href,
                    const wxString target,
-                   wxWebViewNavigationActionFlags flags = wxWEBVIEW_NAV_ACTION_NONE);
+                   wxWebViewNavigationActionFlags flags = wxWEBVIEW_NAV_ACTION_NONE,
+                   const wxString& messageHandler = wxString());
 
     /**
         Get the name of the target frame which the url of this event
@@ -1129,6 +1286,14 @@ public:
         @since 3.1.2
     */
     wxWebViewNavigationActionFlags GetNavigationAction() const;
+
+    /**
+        Get the name of the script handler. Only valid for events of type
+        @c wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED
+
+        @since 3.1.5
+    */
+    const wxString& GetMessageHandler() const;
 };
 
 

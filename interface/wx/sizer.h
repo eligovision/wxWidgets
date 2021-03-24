@@ -400,7 +400,7 @@ public:
     virtual bool Detach(wxSizer* sizer);
 
     /**
-        Detach a item at position @a index from the sizer without destroying it.
+        Detach an item at position @a index from the sizer without destroying it.
 
         This method does not cause any layout or resizing to take place, call Layout()
         to update the layout "on screen" after detaching a child from the sizer.
@@ -1892,7 +1892,7 @@ public:
     itself as a convenience. In any case, the sizer owns the wxStaticBox control
     and will delete it in the wxStaticBoxSizer destructor.
 
-    Note that since wxWidgets 2.9.1 you are encouraged to create the windows
+    Note that since wxWidgets 2.9.1 you are strongly encouraged to create the windows
     which are added to wxStaticBoxSizer as children of wxStaticBox itself, see
     this class documentation for more details.
 

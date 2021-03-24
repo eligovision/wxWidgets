@@ -71,6 +71,10 @@ public:
 
     virtual bool IsBusy() const wxOVERRIDE;
 
+    virtual bool IsAccessToDevToolsEnabled() const wxOVERRIDE;
+    virtual void EnableAccessToDevTools(bool enable = true) wxOVERRIDE;
+    virtual bool SetUserAgent(const wxString& userAgent) wxOVERRIDE;
+
     //History functions
     virtual void ClearHistory() wxOVERRIDE;
     virtual void EnableHistory(bool enable = true) wxOVERRIDE;
@@ -89,6 +93,11 @@ public:
     virtual bool IsEditable() const wxOVERRIDE;
 
     bool RunScript(const wxString& javascript, wxString* output = NULL) const wxOVERRIDE;
+    virtual bool AddScriptMessageHandler(const wxString& name) wxOVERRIDE;
+    virtual bool RemoveScriptMessageHandler(const wxString& name) wxOVERRIDE;
+    virtual bool AddUserScript(const wxString& javascript,
+        wxWebViewUserScriptInjectionTime injectionTime = wxWEBVIEW_INJECT_AT_DOCUMENT_START) wxOVERRIDE;
+    virtual void RemoveAllUserScripts() wxOVERRIDE;
 
     //Virtual Filesystem Support
     virtual void RegisterHandler(wxSharedPtr<wxWebViewHandler> handler) wxOVERRIDE;
@@ -103,6 +112,7 @@ protected:
 private:
     OSXWebViewPtr m_webView;
     wxStringToWebHandlerMap m_handlers;
+    wxString m_customUserAgent;
 
     WX_NSObject m_navigationDelegate;
     WX_NSObject m_UIDelegate;

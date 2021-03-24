@@ -49,6 +49,7 @@ wxDEFINE_EVENT( wxEVT_WEBVIEW_ERROR, wxWebViewEvent );
 wxDEFINE_EVENT( wxEVT_WEBVIEW_NEWWINDOW, wxWebViewEvent );
 wxDEFINE_EVENT( wxEVT_WEBVIEW_TITLE_CHANGED, wxWebViewEvent );
 wxDEFINE_EVENT( wxEVT_WEBVIEW_FULLSCREEN_CHANGED, wxWebViewEvent);
+wxDEFINE_EVENT( wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED, wxWebViewEvent);
 
 wxStringWebViewFactoryMap wxWebView::m_factoryMap;
 
@@ -57,30 +58,24 @@ wxWebViewZoom wxWebView::GetZoom() const
     float zoom = GetZoomFactor();
 
     // arbitrary way to map float zoom to our common zoom enum
-    if (zoom <= 0.55)
+    if (zoom <= 0.55f)
     {
         return wxWEBVIEW_ZOOM_TINY;
     }
-    else if (zoom > 0.55 && zoom <= 0.85)
+    if (zoom <= 0.85f)
     {
         return wxWEBVIEW_ZOOM_SMALL;
     }
-    else if (zoom > 0.85 && zoom <= 1.15)
+    if (zoom <= 1.15f)
     {
         return wxWEBVIEW_ZOOM_MEDIUM;
     }
-    else if (zoom > 1.15 && zoom <= 1.45)
+    if (zoom <= 1.45f)
     {
         return wxWEBVIEW_ZOOM_LARGE;
     }
-    else if (zoom > 1.45)
-    {
-        return wxWEBVIEW_ZOOM_LARGEST;
-    }
 
-    // to shut up compilers, this can never be reached logically
-    wxFAIL_MSG("unreachable");
-    return wxWEBVIEW_ZOOM_MEDIUM;
+    return wxWEBVIEW_ZOOM_LARGEST;
 }
 
 void wxWebView::SetZoom(wxWebViewZoom zoom)
@@ -220,6 +215,13 @@ long wxWebView::Find(const wxString& text, int flags)
         return wxNOT_FOUND;
     else
         return 1;
+}
+
+wxString wxWebView::GetUserAgent() const
+{
+    wxString userAgent;
+    RunScript("navigator.userAgent", &userAgent);
+    return userAgent;
 }
 
 // static

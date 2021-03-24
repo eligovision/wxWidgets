@@ -121,6 +121,7 @@ public:
     void OnNewWindow(wxWebViewEvent& evt);
     void OnTitleChanged(wxWebViewEvent& evt);
     void OnFullScreenChanged(wxWebViewEvent& evt);
+    void OnScriptMessage(wxWebViewEvent& evt);
     void OnSetPage(wxCommandEvent& evt);
     void OnViewSourceRequest(wxCommandEvent& evt);
     void OnViewTextRequest(wxCommandEvent& evt);
@@ -157,7 +158,10 @@ public:
     void OnRunScriptDateWithEmulationLevel(wxCommandEvent& evt);
     void OnRunScriptArrayWithEmulationLevel(wxCommandEvent& evt);
 #endif
+    void OnRunScriptMessage(wxCommandEvent& evt);
     void OnRunScriptCustom(wxCommandEvent& evt);
+    void OnAddUserScript(wxCommandEvent& evt);
+    void OnSetCustomUserAgent(wxCommandEvent& evt);
     void OnClearSelection(wxCommandEvent& evt);
     void OnDeleteSelection(wxCommandEvent& evt);
     void OnSelectAll(wxCommandEvent& evt);
@@ -227,6 +231,7 @@ private:
     wxMenuItem* m_script_date_el;
     wxMenuItem* m_script_array_el;
 #endif
+    wxMenuItem* m_script_message;
     wxMenuItem* m_script_custom;
     wxMenuItem* m_selection_clear;
     wxMenuItem* m_selection_delete;
@@ -389,9 +394,6 @@ WebFrame::WebFrame(const wxString& url) :
 #endif
     // Create the webview
     m_browser = wxWebView::New();
-    // Log backend information
-    wxLogMessage("Backend: %s Version: %s", m_browser->GetClassInfo()->GetClassName(),
-        wxWebView::GetBackendVersionInfo().ToString());
 #ifdef __WXMAC__
     // With WKWebView handlers need to be registered before creation
     m_browser->RegisterHandler(wxSharedPtr<wxWebViewHandler>(new wxWebViewArchiveHandler("wxfs")));
@@ -400,12 +402,19 @@ WebFrame::WebFrame(const wxString& url) :
     m_browser->Create(this, wxID_ANY, url, wxDefaultPosition, wxDefaultSize);
     topsizer->Add(m_browser, wxSizerFlags().Expand().Proportion(1));
 
+    // Log backend information
+    wxLogMessage("Backend: %s Version: %s", m_browser->GetClassInfo()->GetClassName(),
+        wxWebView::GetBackendVersionInfo().ToString());
+    wxLogMessage("User Agent: %s", m_browser->GetUserAgent());
+
 #ifndef __WXMAC__
     //We register the wxfs:// protocol for testing purposes
     m_browser->RegisterHandler(wxSharedPtr<wxWebViewHandler>(new wxWebViewArchiveHandler("wxfs")));
     //And the memory: file system
     m_browser->RegisterHandler(wxSharedPtr<wxWebViewHandler>(new wxWebViewFSHandler("memory")));
 #endif
+    if (!m_browser->AddScriptMessageHandler("wx"))
+        wxLogError("Could not add script message handler");
 
     SetSizer(topsizer);
 
@@ -483,8 +492,11 @@ WebFrame::WebFrame(const wxString& url) :
         m_script_array_el = script_menu->Append(wxID_ANY, "Return array changing emulation level");
     }
 #endif
+    m_script_message = script_menu->Append(wxID_ANY, "Send script message");
     m_script_custom = script_menu->Append(wxID_ANY, "Custom script");
     m_tools_menu->AppendSubMenu(script_menu, _("Run Script"));
+    wxMenuItem* addUserScript = m_tools_menu->Append(wxID_ANY, _("Add user script"));
+    wxMenuItem* setCustomUserAgent = m_tools_menu->Append(wxID_ANY, _("Set custom user agent"));
 
     //Selection menu
     wxMenu* selection = new wxMenu();
@@ -538,6 +550,7 @@ WebFrame::WebFrame(const wxString& url) :
     Bind(wxEVT_WEBVIEW_NEWWINDOW, &WebFrame::OnNewWindow, this, m_browser->GetId());
     Bind(wxEVT_WEBVIEW_TITLE_CHANGED, &WebFrame::OnTitleChanged, this, m_browser->GetId());
     Bind(wxEVT_WEBVIEW_FULLSCREEN_CHANGED, &WebFrame::OnFullScreenChanged, this, m_browser->GetId());
+    Bind(wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED, &WebFrame::OnScriptMessage, this, m_browser->GetId());
 
     // Connect the menu events
     Bind(wxEVT_MENU, &WebFrame::OnSetPage, this, setPage->GetId());
@@ -581,7 +594,10 @@ WebFrame::WebFrame(const wxString& url) :
         Bind(wxEVT_MENU, &WebFrame::OnRunScriptArrayWithEmulationLevel, this, m_script_array_el->GetId());
     }
 #endif
+    Bind(wxEVT_MENU, &WebFrame::OnRunScriptMessage, this, m_script_message->GetId());
     Bind(wxEVT_MENU, &WebFrame::OnRunScriptCustom, this, m_script_custom->GetId());
+    Bind(wxEVT_MENU, &WebFrame::OnAddUserScript, this, addUserScript->GetId());
+    Bind(wxEVT_MENU, &WebFrame::OnSetCustomUserAgent, this, setCustomUserAgent->GetId());
     Bind(wxEVT_MENU, &WebFrame::OnClearSelection, this, m_selection_clear->GetId());
     Bind(wxEVT_MENU, &WebFrame::OnDeleteSelection, this, m_selection_delete->GetId());
     Bind(wxEVT_MENU, &WebFrame::OnSelectAll, this, selectall->GetId());
@@ -905,6 +921,11 @@ void WebFrame::OnFullScreenChanged(wxWebViewEvent & evt)
     ShowFullScreen(evt.GetInt() != 0);
 }
 
+void WebFrame::OnScriptMessage(wxWebViewEvent& evt)
+{
+    wxLogMessage("Script message received; value = %s, handler = %s", evt.GetString(), evt.GetMessageHandler());
+}
+
 void WebFrame::OnSetPage(wxCommandEvent& WXUNUSED(evt))
 {
     m_browser->SetPage
@@ -1175,6 +1196,11 @@ void WebFrame::OnRunScriptArrayWithEmulationLevel(wxCommandEvent& WXUNUSED(evt))
 }
 #endif
 
+void WebFrame::OnRunScriptMessage(wxCommandEvent& WXUNUSED(evt))
+{
+    RunScript("window.wx.postMessage('This is a web message');");
+}
+
 void WebFrame::OnRunScriptCustom(wxCommandEvent& WXUNUSED(evt))
 {
     wxTextEntryDialog dialog
@@ -1189,6 +1215,42 @@ void WebFrame::OnRunScriptCustom(wxCommandEvent& WXUNUSED(evt))
         return;
 
     RunScript(dialog.GetValue());
+}
+
+void WebFrame::OnAddUserScript(wxCommandEvent & WXUNUSED(evt))
+{
+    wxString userScript = "window.wx_test_var = 'wxWidgets webview sample';";
+    wxTextEntryDialog dialog
+    (
+        this,
+        "Enter the JavaScript code to run as the initialization script that runs before any script in the HTML document.",
+        wxGetTextFromUserPromptStr,
+        userScript,
+        wxOK | wxCANCEL | wxCENTRE | wxTE_MULTILINE
+    );
+    if (dialog.ShowModal() != wxID_OK)
+        return;
+
+    if (!m_browser->AddUserScript(dialog.GetValue()))
+        wxLogError("Could not add user script");
+}
+
+void WebFrame::OnSetCustomUserAgent(wxCommandEvent& WXUNUSED(evt))
+{
+    wxString customUserAgent = "Mozilla/5.0 (iPhone; CPU iPhone OS 13_1_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.1 Mobile/15E148 Safari/604.1";
+    wxTextEntryDialog dialog
+    (
+        this,
+        "Enter the custom user agent string you would like to use.",
+        wxGetTextFromUserPromptStr,
+        customUserAgent,
+        wxOK | wxCANCEL | wxCENTRE
+    );
+    if (dialog.ShowModal() != wxID_OK)
+        return;
+
+    if (!m_browser->SetUserAgent(customUserAgent))
+        wxLogError("Could not set custom user agent");
 }
 
 void WebFrame::OnClearSelection(wxCommandEvent& WXUNUSED(evt))

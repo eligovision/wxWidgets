@@ -114,11 +114,15 @@ private:
 
     void CreateResponse();
 
-    // Retrieve the error message corresponding to the given error and set the
-    // state to failed with this message as error string.
-    void SetFailed(DWORD errorCode);
+    // Set the state to State_Failed with the error string including the
+    // provided description of the operation and the error message for this
+    // error code.
+    void SetFailed(const wxString& operation, DWORD errorCode);
 
-    void SetFailedWithLastError() { SetFailed(::GetLastError()); }
+    void SetFailedWithLastError(const wxString& operation)
+    {
+        SetFailed(operation, ::GetLastError());
+    }
 
     friend class wxWebAuthChallengeWinHTTP;
 
@@ -131,6 +135,8 @@ public:
     wxWebSessionWinHTTP();
 
     ~wxWebSessionWinHTTP();
+
+    static bool Initialize();
 
     wxWebRequestImplPtr
     CreateRequest(wxWebSession& session,
@@ -159,7 +165,14 @@ class wxWebSessionFactoryWinHTTP : public wxWebSessionFactory
 {
 public:
     wxWebSessionImpl* Create() wxOVERRIDE
-        { return new wxWebSessionWinHTTP(); }
+    {
+        return new wxWebSessionWinHTTP();
+    }
+
+    bool Initialize() wxOVERRIDE
+    {
+        return wxWebSessionWinHTTP::Initialize();
+    }
 };
 
 #endif // _WX_MSW_WEBREQUEST_WINHTTP_H

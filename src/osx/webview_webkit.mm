@@ -87,6 +87,15 @@ wxEND_EVENT_TABLE()
 @end
 #endif // macOS 10.13+
 
+@interface WebViewScriptMessageHandler: NSObject<WKScriptMessageHandler>
+{
+    wxWebViewWebKit* webKitWindow;
+}
+
+- (id)initWithWxWindow: (wxWebViewWebKit*)inWindow;
+
+@end
+
 //-----------------------------------------------------------------------------
 // wxWebViewFactoryWebKit
 //-----------------------------------------------------------------------------
@@ -114,6 +123,12 @@ bool wxWebViewWebKit::Create(wxWindow *parent,
 
     NSRect r = wxOSXGetFrameForControl( this, pos , size ) ;
     WKWebViewConfiguration* webViewConfig = [[WKWebViewConfiguration alloc] init];
+
+    // WebKit API available since macOS 10.11 and iOS 9.0
+    SEL fullScreenSelector = @selector(_setFullScreenEnabled:);
+    if ([webViewConfig.preferences respondsToSelector:fullScreenSelector])
+        [webViewConfig.preferences performSelector:fullScreenSelector withObject:[NSNumber numberWithBool:YES]];
+
     if (!m_handlers.empty())
     {
 #if __MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_13
@@ -136,6 +151,9 @@ bool wxWebViewWebKit::Create(wxWindow *parent,
 
     MacPostControlCreate(pos, size);
 
+    if (!m_customUserAgent.empty())
+        SetUserAgent(m_customUserAgent);
+
     [m_webView setHidden:false];
 
 
@@ -152,6 +170,11 @@ bool wxWebViewWebKit::Create(wxWindow *parent,
             [[WebViewUIDelegate alloc] initWithWxWindow: this];
 
     [m_webView setUIDelegate:uiDelegate];
+
+    // WebKit API available since macOS 10.13 and iOS 11.0
+    SEL fullScreenDelegateSelector = @selector(_setFullscreenDelegate:);
+    if ([m_webView respondsToSelector:fullScreenDelegateSelector])
+        [m_webView performSelector:fullScreenDelegateSelector withObject:uiDelegate];
 
     m_UIDelegate = uiDelegate;
 
@@ -288,6 +311,41 @@ bool wxWebViewWebKit::IsEditable() const
     return false;
 }
 
+bool wxWebViewWebKit::IsAccessToDevToolsEnabled() const
+{
+    // WebKit API available since macOS 10.11 and iOS 9.0
+    WKPreferences* prefs = m_webView.configuration.preferences;
+    SEL devToolsSelector = @selector(_developerExtrasEnabled);
+    id val = nil;
+    if ([prefs respondsToSelector:devToolsSelector])
+         val = [prefs performSelector:devToolsSelector];
+    return (val != nil);
+}
+
+void wxWebViewWebKit::EnableAccessToDevTools(bool enable)
+{
+    // WebKit API available since macOS 10.11 and iOS 9.0
+    WKPreferences* prefs = m_webView.configuration.preferences;
+    SEL devToolsSelector = @selector(_setDeveloperExtrasEnabled:);
+    if ([prefs respondsToSelector:devToolsSelector])
+        [prefs performSelector:devToolsSelector withObject:(id)enable];
+}
+
+bool wxWebViewWebKit::SetUserAgent(const wxString& userAgent)
+{
+    if (WX_IS_MACOS_AVAILABLE(10, 11))
+    {
+        if (m_webView)
+            m_webView.customUserAgent = wxCFStringRef(userAgent).AsNSString();
+        else
+            m_customUserAgent = userAgent;
+
+        return true;
+    }
+    else
+        return false;
+}
+
 void wxWebViewWebKit::SetZoomType(wxWebViewZoomType zoomType)
 {
     // there is only one supported zoom type at the moment so this setter
@@ -385,6 +443,41 @@ bool wxWebViewWebKit::RunScript(const wxString& javascript, wxString* output) co
     return true;
 }
 
+bool wxWebViewWebKit::AddScriptMessageHandler(const wxString& name)
+{
+    [m_webView.configuration.userContentController addScriptMessageHandler:
+        [[WebViewScriptMessageHandler alloc] initWithWxWindow:this] name:wxCFStringRef(name).AsNSString()];
+    // Make webkit message handler available under common name
+    wxString js = wxString::Format("window.%s = window.webkit.messageHandlers.%s;",
+            name, name);
+    AddUserScript(js);
+    RunScript(js);
+    return true;
+}
+
+bool wxWebViewWebKit::RemoveScriptMessageHandler(const wxString& name)
+{
+    [m_webView.configuration.userContentController removeScriptMessageHandlerForName:wxCFStringRef(name).AsNSString()];
+    return true;
+}
+
+bool wxWebViewWebKit::AddUserScript(const wxString& javascript,
+        wxWebViewUserScriptInjectionTime injectionTime)
+{
+    WKUserScript* userScript =
+        [[WKUserScript alloc] initWithSource:wxCFStringRef(javascript).AsNSString()
+            injectionTime:(injectionTime == wxWEBVIEW_INJECT_AT_DOCUMENT_START) ?
+                WKUserScriptInjectionTimeAtDocumentStart : WKUserScriptInjectionTimeAtDocumentEnd
+            forMainFrameOnly:NO];
+    [m_webView.configuration.userContentController addUserScript:userScript];
+    return true;
+}
+
+void wxWebViewWebKit::RemoveAllUserScripts()
+{
+    [m_webView.configuration.userContentController removeAllUserScripts];
+}
+
 void wxWebViewWebKit::LoadURL(const wxString& url)
 {
     [m_webView loadRequest:[NSURLRequest requestWithURL:
@@ -421,7 +514,7 @@ void wxWebViewWebKit::DoSetPage(const wxString& src, const wxString& baseUrl)
                                     wxCFStringRef( baseUrl ).AsNSString()]];
 }
 
-void wxWebViewWebKit::EnableHistory(bool enable)
+void wxWebViewWebKit::EnableHistory(bool WXUNUSED(enable))
 {
     if ( !m_webView )
         return;
@@ -888,6 +981,75 @@ WX_API_AVAILABLE_MACOS(10, 12)
         completionHandler(nil);
 }
 #endif // __MAC_OS_X_VERSION_MAX_ALLOWED
+
+// The following WKUIDelegateMethods are undocumented as of macOS SDK 11.0,
+// but are documented in the WebKit cocoa interface headers:
+// https://github.com/WebKit/WebKit/blob/main/Source/WebKit/UIProcess/API/Cocoa/WKUIDelegatePrivate.h
+
+- (void)_webView:(WKWebView *)webView printFrame:(WKFrameInfo*)frame
+{
+    webKitWindow->Print();
+}
+
+- (void)SendFullscreenChangedEvent:(int)status
+{
+    wxWebViewEvent event(wxEVT_WEBVIEW_FULLSCREEN_CHANGED, webKitWindow->GetId(),
+        webKitWindow->GetCurrentURL(), wxString());
+    event.SetEventObject(webKitWindow);
+    event.SetInt(status);
+    webKitWindow->HandleWindowEvent(event);
+}
+
+- (void)_webViewDidEnterFullscreen:(WKWebView *)webView
+{
+    [self SendFullscreenChangedEvent:1];
+}
+
+- (void)_webViewDidExitFullscreen:(WKWebView *)webView
+{
+    [self SendFullscreenChangedEvent:0];
+}
+
+@end
+
+@implementation WebViewScriptMessageHandler
+
+- (id)initWithWxWindow: (wxWebViewWebKit*)inWindow
+{
+    if (self = [super init])
+    {
+        webKitWindow = inWindow;    // non retained
+    }
+    return self;
+}
+
+- (void)userContentController:(nonnull WKUserContentController *)userContentController
+      didReceiveScriptMessage:(nonnull WKScriptMessage *)message
+{
+    wxWebViewEvent event(wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED,
+                         webKitWindow->GetId(),
+                         webKitWindow->GetCurrentURL(),
+                         "",
+                         wxWEBVIEW_NAV_ACTION_NONE,
+                         wxCFStringRef::AsString(message.name));
+    if ([message.body isKindOfClass:NSString.class])
+        event.SetString(wxCFStringRef::AsString(message.body));
+    else if ([message.body isKindOfClass:NSNumber.class])
+        event.SetString(wxCFStringRef::AsString(((NSNumber*)message.body).stringValue));
+    else if ([message.body isKindOfClass:NSDate.class])
+        event.SetString(wxCFStringRef::AsString(((NSDate*)message.body).description));
+    else if ([message.body isKindOfClass:NSNull.class])
+        event.SetString("null");
+    else if ([message.body isKindOfClass:NSDictionary.class] || [message.body isKindOfClass:NSArray.class])
+    {
+        NSError* error = nil;
+        NSData* jsonData = [NSJSONSerialization dataWithJSONObject:message.body options:0 error:&error];
+        NSString *jsonString = [[NSString alloc] initWithData:jsonData encoding:NSUTF8StringEncoding];
+        event.SetString(wxCFStringRef::AsString(jsonString));
+    }
+
+    webKitWindow->ProcessWindowEvent(event);
+}
 
 @end
 

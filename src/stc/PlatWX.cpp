@@ -2776,10 +2776,10 @@ PRectangle wxSTCListBox::GetDesiredRect() const
     int maxh ;
 
     // give it a default if there are no lines, and/or add a bit more
-    if (maxw == 0) maxw = 100;
+    if ( maxw == 0 )
+        maxw = 100;
+
     maxw += TextBoxFromClientEdge() + m_textBoxToTextGap + m_aveCharWidth * 3;
-    if (maxw > 350)
-        maxw = 350;
 
     // estimate a desired height
     const int count = Length();

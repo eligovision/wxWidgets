@@ -26,10 +26,13 @@
 #include "wx/msw/private/cotaskmemptr.h"
 #include "wx/msw/private/webview_edge.h"
 
+#ifdef __VISUALC__
 #include <wrl/event.h>
-#include <Objbase.h>
-
 using namespace Microsoft::WRL;
+#include "WebView2EnvironmentOptions.h"
+#else
+#include <wx/msw/wrl/event.h>
+#endif // !__VISUALC__
 
 wxIMPLEMENT_DYNAMIC_CLASS(wxWebViewEdge, wxWebView);
 
@@ -73,6 +76,7 @@ wxWebViewEdgeImpl::~wxWebViewEdgeImpl()
         m_webView->remove_DocumentTitleChanged(m_documentTitleChangedToken);
         m_webView->remove_ContentLoading(m_contentLoadingToken);
         m_webView->remove_ContainsFullScreenElementChanged(m_containsFullScreenElementChangedToken);
+        m_webView->remove_WebMessageReceived(m_webMessageReceivedToken);
     }
 }
 
@@ -81,18 +85,30 @@ bool wxWebViewEdgeImpl::Create()
     m_initialized = false;
     m_isBusy = false;
     m_pendingContextMenuEnabled = -1;
-    m_pendingAccessToDevToolsEnabled = -1;
+    m_pendingAccessToDevToolsEnabled = 0;
 
     m_historyLoadingFromList = false;
     m_historyEnabled = true;
     m_historyPosition = -1;
 
     wxString userDataPath = wxStandardPaths::Get().GetUserLocalDataDir();
+#ifdef __VISUALC__
+    auto options =
+        Make<CoreWebView2EnvironmentOptions>();
+
+    if (!m_customUserAgent.empty())
+        options->put_AdditionalBrowserArguments(
+            wxString::Format("--user-agent=\"%s\"", m_customUserAgent).wc_str());
+#endif
 
     HRESULT hr = wxCreateCoreWebView2EnvironmentWithOptions(
         ms_browserExecutableDir.wc_str(),
         userDataPath.wc_str(),
+#ifdef __VISUALC__
+        options.Get(),
+#else
         nullptr,
+#endif
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(this,
             &wxWebViewEdgeImpl::OnEnvironmentCreated).Get());
     if (FAILED(hr))
@@ -241,8 +257,8 @@ HRESULT wxWebViewEdgeImpl::OnNavigationCompleted(ICoreWebView2* WXUNUSED(sender)
     }
     else
     {
-        if (m_historyEnabled && !m_historyLoadingFromList &&
-            (uri == m_ctrl->GetCurrentURL()) ||
+        if ((m_historyEnabled && !m_historyLoadingFromList &&
+            (uri == m_ctrl->GetCurrentURL())) ||
             (m_ctrl->GetCurrentURL().substr(0, 4) == "file" &&
                 wxFileName::URLToFileName(m_ctrl->GetCurrentURL()).GetFullPath() == uri))
         {
@@ -318,6 +334,37 @@ HRESULT wxWebViewEdgeImpl::OnContainsFullScreenElementChanged(ICoreWebView2* WXU
     return S_OK;
 }
 
+HRESULT
+wxWebViewEdgeImpl::OnWebMessageReceived(ICoreWebView2* WXUNUSED(sender),
+                                        ICoreWebView2WebMessageReceivedEventArgs* args)
+{
+    wxCoTaskMemPtr<wchar_t> msgContent;
+
+    HRESULT hr = args->get_WebMessageAsJson(&msgContent);
+    if (FAILED(hr))
+    {
+        wxLogApiError("get_WebMessageAsJson", hr);
+        return hr;
+    }
+
+    wxWebViewEvent event(wxEVT_WEBVIEW_SCRIPT_MESSAGE_RECEIVED, m_ctrl->GetId(),
+        m_ctrl->GetCurrentURL(), wxString(),
+        wxWEBVIEW_NAV_ACTION_NONE, m_scriptMsgHandlerName);
+    event.SetEventObject(m_ctrl);
+
+    // Try to decode JSON string or return original
+    // result if it's not a valid JSON string
+    wxString msgStr;
+    wxString msgJson(msgContent);
+    if (!wxJSON::DecodeString(msgJson, &msgStr))
+        msgStr = msgJson;
+    event.SetString(msgStr);
+
+    m_ctrl->HandleWindowEvent(event);
+
+    return S_OK;
+}
+
 HRESULT wxWebViewEdgeImpl::OnWebViewCreated(HRESULT result, ICoreWebView2Controller* webViewController)
 {
     if (FAILED(result))
@@ -367,6 +414,10 @@ HRESULT wxWebViewEdgeImpl::OnWebViewCreated(HRESULT result, ICoreWebView2Control
         Callback<ICoreWebView2ContainsFullScreenElementChangedEventHandler>(
             this, &wxWebViewEdgeImpl::OnContainsFullScreenElementChanged).Get(),
         &m_containsFullScreenElementChangedToken);
+    m_webView->add_WebMessageReceived(
+        Callback<ICoreWebView2WebMessageReceivedEventHandler>(
+            this, &wxWebViewEdgeImpl::OnWebMessageReceived).Get(),
+        &m_webMessageReceivedToken);
 
     if (m_pendingContextMenuEnabled != -1)
     {
@@ -382,7 +433,18 @@ HRESULT wxWebViewEdgeImpl::OnWebViewCreated(HRESULT result, ICoreWebView2Control
 
     wxCOMPtr<ICoreWebView2Settings> settings(GetSettings());
     if (settings)
+    {
         settings->put_IsStatusBarEnabled(false);
+    }
+    UpdateWebMessageHandler();
+
+    if (!m_pendingUserScripts.empty())
+    {
+        for (wxVector<wxString>::iterator it = m_pendingUserScripts.begin();
+            it != m_pendingUserScripts.end(); ++it)
+            m_ctrl->AddUserScript(*it);
+        m_pendingUserScripts.clear();
+    }
 
     if (!m_pendingURL.empty())
     {
@@ -391,6 +453,24 @@ HRESULT wxWebViewEdgeImpl::OnWebViewCreated(HRESULT result, ICoreWebView2Control
     }
 
     return S_OK;
+}
+
+void wxWebViewEdgeImpl::UpdateWebMessageHandler()
+{
+    wxCOMPtr<ICoreWebView2Settings> settings(GetSettings());
+    if (!settings)
+        return;
+
+    settings->put_IsWebMessageEnabled(!m_scriptMsgHandlerName.empty());
+
+    if (!m_scriptMsgHandlerName.empty())
+    {
+        // Make edge message handler available under common name
+        wxString js = wxString::Format("window.%s = window.chrome.webview;",
+            m_scriptMsgHandlerName);
+        m_ctrl->AddUserScript(js);
+        m_webView->ExecuteScript(js.wc_str(), NULL);
+    }
 }
 
 ICoreWebView2Settings* wxWebViewEdgeImpl::GetSettings()
@@ -407,6 +487,24 @@ ICoreWebView2Settings* wxWebViewEdgeImpl::GetSettings()
     }
 
     return settings;
+}
+
+wxWebViewEdge::wxWebViewEdge():
+    m_impl(new wxWebViewEdgeImpl(this))
+{
+
+}
+
+wxWebViewEdge::wxWebViewEdge(wxWindow* parent,
+    wxWindowID id,
+    const wxString& url,
+    const wxPoint& pos,
+    const wxSize& size,
+    long style,
+    const wxString& name):
+    m_impl(new wxWebViewEdgeImpl(this))
+{
+    Create(parent, id, url, pos, size, style, name);
 }
 
 wxWebViewEdge::~wxWebViewEdge()
@@ -434,7 +532,6 @@ bool wxWebViewEdge::Create(wxWindow* parent,
         return false;
     }
 
-    m_impl = new wxWebViewEdgeImpl(this);
     if (!m_impl->Create())
         return false;
     Bind(wxEVT_SIZE, &wxWebViewEdge::OnSize, this);
@@ -694,6 +791,20 @@ bool wxWebViewEdge::IsAccessToDevToolsEnabled() const
     return true;
 }
 
+bool wxWebViewEdge::SetUserAgent(const wxString& userAgent)
+{
+    m_impl->m_customUserAgent = userAgent;
+    // Can currently only be set before Create()
+    wxCHECK_MSG(!m_impl->m_webViewController, false, "Can't be called after Create()");
+    if (m_impl->m_webViewController)
+        return false;
+    else
+        return true;
+
+    // TODO: As of Edge SDK 1.0.790 an experimental API to set the user agent
+    // is available. Reimplement using m_impl->GetSettings() when it's stable.
+}
+
 void* wxWebViewEdge::GetNativeBackend() const
 {
     return m_impl->m_webView;
@@ -707,6 +818,8 @@ void wxWebViewEdge::MSWSetBrowserExecutableDir(const wxString & path)
 bool wxWebViewEdge::RunScriptSync(const wxString& javascript, wxString* output) const
 {
     bool scriptExecuted = false;
+    if (!m_impl->m_webView)
+        return false;
 
     // Start script execution
     HRESULT executionResult = m_impl->m_webView->ExecuteScript(javascript.wc_str(), Callback<ICoreWebView2ExecuteScriptCompletedHandler>(
@@ -772,7 +885,66 @@ bool wxWebViewEdge::RunScript(const wxString& javascript, wxString* output) cons
     return true;
 }
 
-void wxWebViewEdge::RegisterHandler(wxSharedPtr<wxWebViewHandler> handler)
+bool wxWebViewEdge::AddScriptMessageHandler(const wxString& name)
+{
+    // Edge only supports a single message handler
+    if (!m_impl->m_scriptMsgHandlerName.empty())
+        return false;
+
+    m_impl->m_scriptMsgHandlerName = name;
+    m_impl->UpdateWebMessageHandler();
+
+    return true;
+}
+
+bool wxWebViewEdge::RemoveScriptMessageHandler(const wxString& WXUNUSED(name))
+{
+    m_impl->m_scriptMsgHandlerName.clear();
+    m_impl->UpdateWebMessageHandler();
+    return true;
+}
+
+HRESULT wxWebViewEdgeImpl::OnAddScriptToExecuteOnDocumentedCreatedCompleted(HRESULT errorCode, LPCWSTR id)
+{
+    if (SUCCEEDED(errorCode))
+        m_userScriptIds.push_back(id);
+    return S_OK;
+}
+
+bool wxWebViewEdge::AddUserScript(const wxString& javascript,
+    wxWebViewUserScriptInjectionTime injectionTime)
+{
+    // Currently only AT_DOCUMENT_START is supported
+    if (injectionTime != wxWEBVIEW_INJECT_AT_DOCUMENT_START)
+        return false;
+
+    if (m_impl->m_webView)
+    {
+        HRESULT hr = m_impl->m_webView->AddScriptToExecuteOnDocumentCreated(javascript.wc_str(),
+            Callback<ICoreWebView2AddScriptToExecuteOnDocumentCreatedCompletedHandler>(m_impl,
+            &wxWebViewEdgeImpl::OnAddScriptToExecuteOnDocumentedCreatedCompleted).Get());
+        if (FAILED(hr))
+            return false;
+    }
+    else
+        m_impl->m_pendingUserScripts.push_back(javascript);
+
+    return true;
+}
+
+void wxWebViewEdge::RemoveAllUserScripts()
+{
+    m_impl->m_pendingUserScripts.clear();
+    for (auto& scriptId : m_impl->m_userScriptIds)
+    {
+        HRESULT hr = m_impl->m_webView->RemoveScriptToExecuteOnDocumentCreated(scriptId.wc_str());
+        if (FAILED(hr))
+            wxLogApiError("RemoveScriptToExecuteOnDocumentCreated", hr);
+    }
+    m_impl->m_userScriptIds.clear();
+}
+
+void wxWebViewEdge::RegisterHandler(wxSharedPtr<wxWebViewHandler> WXUNUSED(handler))
 {
     // TODO: could maybe be implemented via IWebView2WebView5::add_WebResourceRequested
     wxLogDebug("Registering handlers is not supported");

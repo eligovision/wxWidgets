@@ -78,6 +78,11 @@ public:
     virtual wxString GetPageText() const wxOVERRIDE;
     virtual void Print() wxOVERRIDE;
     virtual bool IsBusy() const wxOVERRIDE;
+#if wxUSE_WEBVIEW_WEBKIT2
+    virtual void EnableAccessToDevTools(bool enable = true) wxOVERRIDE;
+    virtual bool IsAccessToDevToolsEnabled() const wxOVERRIDE;
+    virtual bool SetUserAgent(const wxString& userAgent) wxOVERRIDE;
+#endif
 
     void SetZoomType(wxWebViewZoomType) wxOVERRIDE;
     wxWebViewZoomType GetZoomType() const wxOVERRIDE;
@@ -115,6 +120,13 @@ public:
     virtual void ClearSelection() wxOVERRIDE;
 
     virtual bool RunScript(const wxString& javascript, wxString* output = NULL) const wxOVERRIDE;
+#if wxUSE_WEBVIEW_WEBKIT2
+    virtual bool AddScriptMessageHandler(const wxString& name) wxOVERRIDE;
+    virtual bool RemoveScriptMessageHandler(const wxString& name) wxOVERRIDE;
+    virtual bool AddUserScript(const wxString& javascript,
+        wxWebViewUserScriptInjectionTime injectionTime = wxWEBVIEW_INJECT_AT_DOCUMENT_START) wxOVERRIDE;
+    virtual void RemoveAllUserScripts() wxOVERRIDE;
+#endif
 
     //Virtual Filesystem Support
     virtual void RegisterHandler(wxSharedPtr<wxWebViewHandler> handler) wxOVERRIDE;
@@ -165,6 +177,7 @@ private:
 #endif
 
     WebKitWebView *m_web_view;
+    wxString m_customUserAgent;
     int m_historyLimit;
 
     wxVector<wxSharedPtr<wxWebViewHandler> > m_handlerList;
