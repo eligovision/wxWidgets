@@ -884,6 +884,19 @@ static void SetDrawingEnabledIfFrozenRecursive(wxWidgetCocoaImpl *impl, bool ena
     [super viewDidMoveToWindow];
 }
 
+#if __MAC_OS_X_VERSION_MAX_ALLOWED >= 101200
+- (void) viewWillDraw
+{
+    if ( WX_IS_MACOS_AVAILABLE(11, 0) )
+    {
+        CALayer* layer = self.layer;
+        layer.contentsFormat = kCAContentsFormatRGBA8Uint;
+    }
+    
+    [super viewWillDraw];
+}
+#endif
+
 @end // wxNSView
 
 // We need to adopt NSTextInputClient protocol in order to interpretKeyEvents: to work.
@@ -3062,7 +3075,24 @@ void SetSubviewsNeedDisplay( NSView *view )
         SetSubviewsNeedDisplay(sub);
     }
 }
-    
+
+void SetSubviewsNeedDisplay( NSView *view, NSRect rect )
+{
+    for ( NSView *sub in view.subviews )
+    {
+        if ( sub.isHidden )
+            continue;
+
+        NSRect intersect = NSIntersectionRect(sub.frame, rect);
+        if ( !NSIsEmptyRect(intersect) )
+        {
+            intersect = [view convertRect:intersect toView:sub];
+            [sub setNeedsDisplayInRect:intersect];
+            SetSubviewsNeedDisplay(sub, intersect);
+        }
+    }
+}
+
 }
 #endif
 
@@ -3081,7 +3111,12 @@ void wxWidgetCocoaImpl::SetNeedsDisplay( const wxRect* where )
     // do it manually here:
 #if __MAC_OS_X_VERSION_MAX_ALLOWED >= MAC_OS_X_VERSION_10_14
     if ( WX_IS_MACOS_AVAILABLE(10, 14 ) )
-        SetSubviewsNeedDisplay(m_osxView);
+    {
+        if ( where )
+            SetSubviewsNeedDisplay(m_osxView, wxToNSRect(m_osxView, *where ));
+        else
+            SetSubviewsNeedDisplay(m_osxView);
+    }
 #endif
 }
 
@@ -3543,23 +3578,35 @@ void wxWidgetCocoaImpl::SetControlSize( wxWindowVariant variant )
     }
 }
 
+NSView* wxWidgetCocoaImpl::GetViewWithText() const
+{
+    if ( [m_osxView isKindOfClass:[NSScrollView class] ] )
+        return [(NSScrollView*) m_osxView documentView];
+    else if ( [m_osxView isKindOfClass:[NSBox class] ] )
+        return [(NSBox*) m_osxView titleCell];
+
+    return m_osxView;
+}
+
 void wxWidgetCocoaImpl::SetFont(wxFont const& font)
 {
-    NSView* targetView = m_osxView;
-    if ( [m_osxView isKindOfClass:[NSScrollView class] ] )
-        targetView = [(NSScrollView*) m_osxView documentView];
-    else if ( [m_osxView isKindOfClass:[NSBox class] ] )
-        targetView = [(NSBox*) m_osxView titleCell];
+    NSView* const targetView = GetViewWithText();
 
     if ([targetView respondsToSelector:@selector(setFont:)])
         [targetView setFont: font.OSXGetNSFont()];
+    if ([m_osxView respondsToSelector:@selector(setAttributedTitle:)])
+        SetLabel(wxStripMenuCodes(GetWXPeer()->GetLabel(), wxStrip_Mnemonics), GetWXPeer()->GetFont().GetEncoding());
+}
+
+void wxWidgetCocoaImpl::SetForegroundColour(const wxColour& col)
+{
+    NSView* const targetView = GetViewWithText();
+
     if ([targetView respondsToSelector:@selector(setTextColor:)])
     {
         wxColor col = GetWXPeer()->GetForegroundColour();
         [targetView setTextColor: col.OSXGetNSColor()];
     }
-    if ([m_osxView respondsToSelector:@selector(setAttributedTitle:)])
-        SetLabel(wxStripMenuCodes(GetWXPeer()->GetLabel(), wxStrip_Mnemonics), GetWXPeer()->GetFont().GetEncoding());
 }
 
 void wxWidgetCocoaImpl::SetToolTip(wxToolTip* tooltip)

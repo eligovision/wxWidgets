@@ -4,6 +4,8 @@
 
 set -e
 
+. ./build/tools/httpbin.sh
+
 wxPROC_COUNT=`getconf _NPROCESSORS_ONLN`
 ((wxPROC_COUNT++))
 wxBUILD_ARGS="-j$wxPROC_COUNT"
@@ -11,26 +13,6 @@ wxBUILD_ARGS="-j$wxPROC_COUNT"
 # Setting this variable suppresses "Error retrieving accessibility bus address"
 # messages from WebKit tests that we're not interested in.
 export NO_AT_BRIDGE=1
-
-launch_httpbin() {
-    echo 'travis_fold:start:httpbin'
-    echo 'Running httpbin...'
-
-    # We need to disable SSL certificate checking under Trusty because Python
-    # version there is too old to support SNI.
-    case "$(lsb_release --codename --short)" in
-        trusty)
-            pip_args='--trusted-host files.pythonhosted.org'
-            ;;
-    esac
-
-    pip install httpbin --user $pip_args
-    python -m httpbin.core &
-    WX_TEST_WEBREQUEST_URL="http://localhost:5000"
-
-    export WX_TEST_WEBREQUEST_URL
-    echo 'travis_fold:end:httpbin'
-}
 
 case $wxTOOLSET in
     cmake)
@@ -62,12 +44,18 @@ case $wxTOOLSET in
         echo 'travis_fold:end:install'
 
         if [ "$wxCMAKE_TESTS" != "OFF" ]; then
-            launch_httpbin
+            echo 'travis_fold:start:httpbin'
+            httpbin_launch
+            echo 'travis_fold:end:httpbin'
 
             echo 'travis_fold:start:testing'
             echo 'Testing...'
-            ctest -V -C Debug -E "test_drawing" --output-on-failure --interactive-debug-mode 0 .
+            ctest -V -C Debug -E "test_drawing" --output-on-failure --interactive-debug-mode 0 . || rc=$?
             echo 'travis_fold:end:testing'
+            if [ -n "$rc" ]; then
+                httpbin_show_log
+                exit $rc
+            fi
         fi
 
         echo 'travis_fold:start:testinstall'
@@ -101,17 +89,30 @@ case $wxTOOLSET in
         echo 'travis_fold:end:configure'
 
         if [ "$wxALLOW_WARNINGS" != 1 ]; then
-            case "$TRAVIS_COMPILER" in
+            # Under macOS TRAVIS_COMPILER is set to g++, but it's actually an
+            # alias for clang.
+            case "$(uname -s)" in
+                Darwin)
+                    real_compiler=clang
+                    ;;
+
+                *)
+                    # Elsewhere either gcc or clang can be used.
+                    real_compiler="$TRAVIS_COMPILER"
+                    ;;
+            esac
+
+            case "$real_compiler" in
                 clang)
                     allow_warn_opt="-Wno-error=#warnings"
                     ;;
 
-                gcc)
+                gcc | g++)
                     allow_warn_opt="-Wno-error=cpp"
                     ;;
 
                 *)
-                    echo "*** Unknown compiler: $TRAVIS_COMPILER ***"
+                    echo "*** Unknown compiler: $real_compiler ***"
                     ;;
             esac
 
@@ -146,14 +147,20 @@ case $wxTOOLSET in
             exit 0
         fi
 
-        launch_httpbin
+        echo 'travis_fold:start:httpbin'
+        httpbin_launch
+        echo 'travis_fold:end:httpbin'
 
         echo 'travis_fold:start:testing'
         echo 'Testing...'
         pushd tests
-        ./test
+        ./test || rc=$?
         popd
         echo 'travis_fold:end:testing'
+        if [ -n "$rc" ]; then
+            httpbin_show_log
+            exit $rc
+        fi
 
         if [ "$wxSKIP_GUI" = 1 ]; then
             echo 'Skipping the rest of tests for non-GUI build.'

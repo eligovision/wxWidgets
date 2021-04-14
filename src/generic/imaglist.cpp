@@ -41,20 +41,25 @@ wxGenericImageList::~wxGenericImageList()
 
 int wxGenericImageList::GetImageCount() const
 {
+    wxASSERT_MSG( m_size != wxSize(0, 0), "Invalid image list" );
+
     return static_cast<int>(m_images.size());
 }
 
 bool wxGenericImageList::Create( int width, int height, bool mask, int WXUNUSED(initialCount) )
 {
-    m_size = wxSize(width, height);
+    // Prevent from storing negative dimensions
+    m_size = wxSize(wxMax(width, 0), wxMax(height, 0));
     m_useMask = mask;
+    m_scaleFactor = 1.0;
 
-    return true;
+    // Images must have proper size
+    return m_size != wxSize(0, 0);
 }
 
 namespace
 {
-wxBitmap GetImageListBitmap(const wxBitmap& bitmap, bool useMask, const wxSize& imgSize)
+wxBitmap GetImageListBitmap(const wxBitmap& bitmap, bool useMask, const wxSize& imgSize, double scaleFactor)
 {
     wxBitmap bmp(bitmap);
     if ( useMask )
@@ -69,7 +74,7 @@ wxBitmap GetImageListBitmap(const wxBitmap& bitmap, bool useMask, const wxSize& 
 #if wxUSE_IMAGE
                 wxImage img = bmp.ConvertToImage();
                 img.ClearAlpha();
-                bmp = img;
+                bmp = wxBitmap(img, -1, scaleFactor);
 #endif // wxUSE_IMAGE
             }
         }
@@ -81,7 +86,7 @@ wxBitmap GetImageListBitmap(const wxBitmap& bitmap, bool useMask, const wxSize& 
 #if wxUSE_IMAGE
                 wxImage img = bmp.ConvertToImage();
                 img.ConvertAlphaToMask();
-                bmp = img;
+                bmp = wxBitmap(img, -1, scaleFactor);
 #endif // wxUSE_IMAGE
             }
             else
@@ -107,7 +112,7 @@ wxBitmap GetImageListBitmap(const wxBitmap& bitmap, bool useMask, const wxSize& 
 #if wxUSE_IMAGE
                 wxImage img = bmp.ConvertToImage();
                 img.InitAlpha();
-                bmp = img;
+                bmp = wxBitmap(img, -1, scaleFactor);
 #else
                 bmp.SetMask(NULL);
 #endif // wxUSE_IMAGE
@@ -117,7 +122,7 @@ wxBitmap GetImageListBitmap(const wxBitmap& bitmap, bool useMask, const wxSize& 
 
     // Ensure image size is the same as the size of the images on the image list.
     wxBitmap bmpResized;
-    const wxSize sz = bmp.GetSize();
+    const wxSize sz = bmp.GetScaledSize();
     if ( sz.x == imgSize.x && sz.y == imgSize.y )
     {
         bmpResized = bmp;
@@ -131,8 +136,9 @@ wxBitmap GetImageListBitmap(const wxBitmap& bitmap, bool useMask, const wxSize& 
     {
 #if wxUSE_IMAGE
         wxImage img = bmp.ConvertToImage();
-        wxImage imgResized = img.Size(imgSize, wxPoint(0, 0), 0, 0, 0);
-        bmpResized = imgResized;
+        // We need image with new physical size
+        wxImage imgResized = img.Size(scaleFactor * imgSize, wxPoint(0, 0), 0, 0, 0);
+        bmpResized = wxBitmap(imgResized, -1, scaleFactor);
 #else
         bmpResized = bmp;
 #endif // wxUSE_IMAGE
@@ -144,23 +150,32 @@ wxBitmap GetImageListBitmap(const wxBitmap& bitmap, bool useMask, const wxSize& 
 
 int wxGenericImageList::Add( const wxBitmap &bitmap )
 {
+    // Cannot add image to invalid list
+    if ( m_size == wxSize(0, 0) )
+        return -1;
+
+    if ( m_images.empty() )
+    {
+        // This is the first time Add() is called so we should save
+        // scale factor to check if further images will have the same scaling
+        m_scaleFactor = bitmap.GetScaleFactor();
+    }
+    else if ( bitmap.GetScaleFactor() != m_scaleFactor )
+    {
+        // All images in the list should have the same scale factor
+        return -1;
+    }
+
     // We use the scaled, i.e. logical, size here as image list images size is
     // specified in logical pixels, just as window coordinates and sizes are.
     const wxSize bitmapSize = bitmap.GetScaledSize();
-
-    if ( m_size == wxSize(0, 0) )
-    {
-        // This is the first time Add() is called and we hadn't had any fixed
-        // size: adopt the size of our first bitmap as image size.
-        m_size = bitmapSize;
-    }
 
     // There is a special case: a bitmap may contain more than one image,
     // in which case we're supposed to chop it in parts, just as Windows
     // ImageList_Add() does.
     if ( bitmapSize.x == m_size.x )
     {
-        m_images.push_back(GetImageListBitmap(bitmap, m_useMask, m_size));
+        m_images.push_back(GetImageListBitmap(bitmap, m_useMask, m_size, m_scaleFactor));
     }
     else if ( bitmapSize.x > m_size.x )
     {
@@ -168,7 +183,7 @@ int wxGenericImageList::Add( const wxBitmap &bitmap )
         for (int subIndex = 0; subIndex < numImages; subIndex++)
         {
             wxRect rect(m_size.x * subIndex, 0, m_size.x, m_size.y);
-            m_images.push_back(GetImageListBitmap(bitmap.GetSubBitmap(rect), m_useMask, m_size));
+            m_images.push_back(GetImageListBitmap(bitmap.GetSubBitmap(rect), m_useMask, m_size, m_scaleFactor));
         }
     }
     else
@@ -233,17 +248,26 @@ wxGenericImageList::Replace(int index,
     if ( !DoGetPtr(index) )
         return false;
 
+    if ( bitmap.GetScaleFactor() != m_scaleFactor )
+    {
+        // All images in the list should have the same scale factor
+        return false;
+    }
+
     wxBitmap bmp(bitmap);
     if ( mask.IsOk() )
         bmp.SetMask(new wxMask(mask));
 
-    m_images[index] = GetImageListBitmap(bmp, m_useMask, m_size);
+    m_images[index] = GetImageListBitmap(bmp, m_useMask, m_size, m_scaleFactor);
 
     return true;
 }
 
 bool wxGenericImageList::Remove( int index )
 {
+    if ( index < 0 || (size_t)index >= m_images.size() )
+        return false;
+
     m_images.erase(m_images.begin() + index);
 
     return true;
@@ -256,18 +280,12 @@ bool wxGenericImageList::RemoveAll()
     return true;
 }
 
-bool wxGenericImageList::GetSize( int index, int &width, int &height ) const
+bool wxGenericImageList::GetSize( int WXUNUSED(index), int &width, int &height ) const
 {
-    const wxBitmap* bmp = DoGetPtr(index);
-    if ( !bmp )
-    {
-        width = 0;
-        height = 0;
-        return false;
-    }
+    width = m_size.x;
+    height = m_size.y;
 
-    width = bmp->GetScaledWidth();
-    height = bmp->GetScaledHeight();
+    wxCHECK_MSG( m_size != wxSize(0, 0), false, "Invalid image list" );
 
     return true;
 }
