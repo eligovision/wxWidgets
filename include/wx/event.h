@@ -32,14 +32,10 @@
 #include "wx/vector.h"
 
 #include "wx/meta/convertible.h"
+#include "wx/meta/removeref.h"
 
-// Currently VC7 is known to not be able to compile CallAfter() code, so
-// disable it for it (FIXME-VC7).
-#if !defined(__VISUALC__) || wxCHECK_VISUALC_VERSION(8)
-    #include "wx/meta/removeref.h"
-
-    #define wxHAS_CALL_AFTER
-#endif
+// This is now always defined, but keep it for backwards compatibility.
+#define wxHAS_CALL_AFTER
 
 // ----------------------------------------------------------------------------
 // forward declarations
@@ -1382,8 +1378,6 @@ private:
 // done asynchronously, i.e. at some later time, instead of immediately when
 // the event object is constructed.
 
-#ifdef wxHAS_CALL_AFTER
-
 // This is a base class used to process all method calls.
 class wxAsyncMethodCallEvent : public wxEvent
 {
@@ -1563,9 +1557,6 @@ public:
 private:
     FunctorType m_fn;
 };
-
-#endif // wxHAS_CALL_AFTER
-
 
 #if wxUSE_GUI
 
@@ -3774,7 +3765,6 @@ public:
     static void WXConsumeException();
 #endif // wxUSE_EXCEPTIONS
 
-#ifdef wxHAS_CALL_AFTER
     // Asynchronous method calls: these methods schedule the given method
     // pointer for a later call (during the next idle event loop iteration).
     //
@@ -3818,7 +3808,6 @@ public:
     {
         QueueEvent(new wxAsyncMethodCallEventFunctor<T>(this, fn));
     }
-#endif // wxHAS_CALL_AFTER
 
 
     // Connecting and disconnecting
@@ -4394,8 +4383,8 @@ typedef void (wxEvtHandler::*wxPressAndTapEventFunction)(wxPressAndTapEvent&);
         static const wxEventTableEntry sm_eventTableEntries[];          \
     protected:                                                          \
         wxWARNING_SUPPRESS_MISSING_OVERRIDE()                           \
-        const wxEventTable* GetEventTable() const;                      \
-        wxEventHashTable& GetEventHashTable() const;                    \
+        const wxEventTable* GetEventTable() const wxDUMMY_OVERRIDE;     \
+        wxEventHashTable& GetEventHashTable() const wxDUMMY_OVERRIDE;   \
         wxWARNING_RESTORE_MISSING_OVERRIDE()                            \
         static const wxEventTable        sm_eventTable;                 \
         static wxEventHashTable          sm_eventHashTable

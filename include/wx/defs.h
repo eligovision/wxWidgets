@@ -741,6 +741,17 @@ typedef short int WXTYPE;
 #endif
 
 /*
+    Macros above don't work with gcc 11 due to a compiler bug, unless we also
+    use "override" in the function declaration -- but this breaks other
+    compilers, so define a specific macro for gcc 11 only.
+ */
+#if wxCHECK_GCC_VERSION(11, 0)
+#   define wxDUMMY_OVERRIDE wxOVERRIDE
+#else
+#   define wxDUMMY_OVERRIDE
+#endif
+
+/*
     Combination of the two variants above: should be used for deprecated
     functions which are defined inline and are used by wxWidgets itself.
  */
@@ -1255,6 +1266,28 @@ typedef double wxDouble;
 /*  Geometric flags */
 /*  ---------------------------------------------------------------------------- */
 
+/*
+    In C++20 operations on the elements of different enums are deprecated and
+    many compilers (clang 10+, gcc 11+, MSVS 2019) warn about combining them,
+    as a lot of existing code using them does, so we provide explicit operators
+    for doing this, that do the same thing as would happen without them, but
+    without the warnings.
+ */
+#if defined(__cplusplus) && (__cplusplus >= 202002L)
+    #define wxALLOW_COMBINING_ENUMS_IMPL(en1, en2)                            \
+        inline int operator|(en1 v1, en2 v2)                                  \
+            { return static_cast<int>(v1) | static_cast<int>(v2); }           \
+        inline int operator+(en1 v1, en2 v2)                                  \
+            { return static_cast<int>(v1) + static_cast<int>(v2); }
+
+    #define wxALLOW_COMBINING_ENUMS(en1, en2)                                 \
+        wxALLOW_COMBINING_ENUMS_IMPL(en1, en2)                                \
+        wxALLOW_COMBINING_ENUMS_IMPL(en2, en1)
+#else /* !C++ 20 */
+    /* Don't bother doing anything in this case. */
+    #define wxALLOW_COMBINING_ENUMS(en1, en2)
+#endif /* C++ 20 */
+
 enum wxGeometryCentre
 {
     wxCENTRE                  = 0x0001,
@@ -1352,7 +1385,7 @@ enum wxStretch
     wxGROW                    = 0x2000,
     wxEXPAND                  = wxGROW,
     wxSHAPED                  = 0x4000,
-    wxTILE                    = wxSHAPED | wxFIXED_MINSIZE,
+    wxTILE                    = 0xc000, /* wxSHAPED | wxFIXED_MINSIZE */
 
     /*  a mask to extract stretch from the combination of flags */
     wxSTRETCH_MASK            = 0x7000 /* sans wxTILE */
@@ -1379,6 +1412,16 @@ enum wxBorder
 
 /* This makes it easier to specify a 'normal' border for a control */
 #define wxDEFAULT_CONTROL_BORDER    wxBORDER_SUNKEN
+
+/*
+    Elements of these enums can be combined with each other when using
+    wxSizer::Add() overload not using wxSizerFlags.
+ */
+wxALLOW_COMBINING_ENUMS(wxAlignment, wxDirection)
+wxALLOW_COMBINING_ENUMS(wxAlignment, wxGeometryCentre)
+wxALLOW_COMBINING_ENUMS(wxAlignment, wxStretch)
+wxALLOW_COMBINING_ENUMS(wxDirection, wxStretch)
+wxALLOW_COMBINING_ENUMS(wxDirection, wxGeometryCentre)
 
 /*  ---------------------------------------------------------------------------- */
 /*  Window style flags */
@@ -2605,6 +2648,7 @@ typedef int (* LINKAGEMODE wxListIterateFunction)(void *current);
 #ifdef __DARWIN__
 #define DECLARE_WXOSX_OPAQUE_CFREF( name ) typedef struct __##name* name##Ref;
 #define DECLARE_WXOSX_OPAQUE_CONST_CFREF( name ) typedef const struct __##name* name##Ref;
+
 #endif
 
 #ifdef __WXMAC__
@@ -2632,15 +2676,43 @@ typedef void*       WXDisplay;
  * core frameworks
  */
 
-typedef const void * CFTypeRef;
+#if __has_attribute(objc_bridge) && __has_feature(objc_bridge_id) && __has_feature(objc_bridge_id_on_typedefs)
 
-DECLARE_WXOSX_OPAQUE_CONST_CFREF( CFData )
-DECLARE_WXOSX_OPAQUE_CONST_CFREF( CFString )
-typedef struct __CFString * CFMutableStringRef;
-DECLARE_WXOSX_OPAQUE_CONST_CFREF( CFDictionary )
+#ifdef __OBJC__
+@class NSArray;
+@class NSString;
+@class NSData;
+@class NSDictionary;
+#endif
 
-DECLARE_WXOSX_OPAQUE_CONST_CFREF( CFArray )
-typedef struct __CFArray * CFMutableArrayRef;
+#define WXOSX_BRIDGED_TYPE(T)		__attribute__((objc_bridge(T)))
+#define WXOSX_BRIDGED_MUTABLE_TYPE(T)	__attribute__((objc_bridge_mutable(T)))
+
+#else
+
+#define WXOSX_BRIDGED_TYPE(T)
+#define WXOSX_BRIDGED_MUTABLE_TYPE(T)
+
+#endif
+
+#define DECLARE_WXOSX_BRIDGED_TYPE_AND_CFREF( name ) \
+    typedef const struct WXOSX_BRIDGED_TYPE(NS##name) __CF##name* CF##name##Ref;
+#define DECLARE_WXOSX_BRIDGED_MUTABLE_TYPE_AND_CFREF( name ) \
+    typedef struct WXOSX_BRIDGED_MUTABLE_TYPE(NSMutable##name) __CF##name* CFMutable##name##Ref;
+
+typedef const WXOSX_BRIDGED_TYPE(id) void * CFTypeRef;
+
+DECLARE_WXOSX_BRIDGED_TYPE_AND_CFREF( Data )
+DECLARE_WXOSX_BRIDGED_MUTABLE_TYPE_AND_CFREF( Data )
+
+DECLARE_WXOSX_BRIDGED_TYPE_AND_CFREF( String )
+DECLARE_WXOSX_BRIDGED_MUTABLE_TYPE_AND_CFREF( String )
+
+DECLARE_WXOSX_BRIDGED_TYPE_AND_CFREF( Dictionary )
+DECLARE_WXOSX_BRIDGED_MUTABLE_TYPE_AND_CFREF( Dictionary )
+
+DECLARE_WXOSX_BRIDGED_TYPE_AND_CFREF( Array )
+DECLARE_WXOSX_BRIDGED_MUTABLE_TYPE_AND_CFREF( Array )
 
 DECLARE_WXOSX_OPAQUE_CFREF( CFRunLoopSource )
 DECLARE_WXOSX_OPAQUE_CONST_CFREF( CTFont )

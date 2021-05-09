@@ -506,6 +506,11 @@ bool wxSpinCtrlGenericBase::SyncSpinToText(SendEvent sendEvent)
 // changing value and range
 // ----------------------------------------------------------------------------
 
+wxString wxSpinCtrlGenericBase::GetTextValue() const
+{
+    return m_textCtrl ? m_textCtrl->GetValue() : wxString();
+}
+
 void wxSpinCtrlGenericBase::SetValue(const wxString& text)
 {
     wxCHECK_RET( m_textCtrl, wxT("invalid call to wxSpinCtrl::SetValue") );
@@ -517,6 +522,8 @@ void wxSpinCtrlGenericBase::SetValue(const wxString& text)
     }
     else // not a number at all or out of range
     {
+        m_value = m_min;
+
         m_textCtrl->ChangeValue(text);
         m_textCtrl->SelectAll();
     }
