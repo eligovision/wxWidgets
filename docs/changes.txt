@@ -249,12 +249,12 @@ Changes in behaviour which may result in build errors
   minimum required version is now 2005.
 
 
-3.2.9: (released 2025-??-??)
+3.2.9: (released 2025-12-12)
 ----------------------------
 
 All:
 
-- Backport several CMake enhancements from 3.3 (Maarten Bent, #25448).
+- Backport several CMake enhancements from 3.3 (Maarten Bent, #25448, #25998).
 - Fix using wxSOCKET_NOWAIT_READ and wxSOCKET_WAITALL_WRITE together (#17114).
 - Make wxPlatformInfo::Get() thread-safe (#25459).
 - Fix CMake build under Alpine Linux and other systems using musl (#25749).
@@ -268,15 +268,18 @@ All (GUI):
 - Fix selecting columns in wxGrid with mouse (Dietmar Schwertberger, #25884).
 - Improve wxActivityIndicator dots colour contrast with background (#25405).
 - Update wxGenericTreeCtrl item height after changing its font (#16428).
+- Respect HTML5 charset attribute in wxHTML (Kees van der Oord, #25546).
 
 wxGTK:
 
+- Add support for using EGL 1.4 (and not 1.5) in wxGLCanvas (#22325).
+- Fix crash deleting wxTextCtrl from wxEVT_TEXT_ENTER handler (#26006).
 - Fix handling total window size with GNOME with X11 (#25348).
 - Fix height of read-only wxBitmapComboBox (#25468).
 - Fix memory leak when using wxOverlay (#24500).
-- Fix wxGLCanvas scale when using EGL/Wayland in high DPI (Popax21, #23733).
 - Fix missing wxEVT_CHAR for Ctrl-Letter in non-US layouts (#25384).
 - Fix regression when unmaximizing windows under XFCE/MATE (#25708).
+- Fix wxGLCanvas scale when using EGL/Wayland in high DPI (Popax21, #23733).
 - Show system default window buttons under Wayland (#25562).
 
 wxMSW
@@ -285,8 +288,10 @@ wxMSW
 - Fix using wxNO_IMPLICIT_WXSTRING_ENCODING with PCH (#25568).
 - Fix crash when copying wxBitmaps if GDI resources are exhausted (#24703).
 - Fix MSVS debug visualizer for wxString (#25684).
+- Fix wxStyledTextCtrl support in screen readers (Maarten Bent, #25963).
 - Fix TAB behaviour in a panel with notebook as only active child (#25443).
 - Reduce GDI resource usage in wxStaticBitmap (Alex Shvartzkop, #25698).
+- Significantly improve performance of drawing bitmaps in wxAUI (#23841).
 
 wxOSX:
 
@@ -297,9 +302,12 @@ wxOSX:
 - Fix regression with configure build under macOS < 12 (#25675).
 - Fix build under macOS 26 Tahoe (#25798).
 - Fix build problem with memset_s() with PCH enabled (#24687).
+- Fix invisible labels in wxGrid with native header control (#26014).
 - Fix nested markup attributes handling (Václav Slavík, #25864).
 - Fix possible use of already destroyed wxTimers (Federico Perini, #25871).
 - Fix handling of multiple filters in wxFileDialog (#25918).
+- Fix value in wxEVT_SPIN with non-0 initial value (Robert Roebling, #26002).
+- Improve appearance of wxSpinCtrl (Robert Roebling, #26002).
 
 
 3.2.8.1: (released 2025-05-25)
