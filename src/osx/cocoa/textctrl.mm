@@ -493,6 +493,12 @@ NSView* wxMacEditHelper::ms_viewCurrentlyEdited = nil;
     return self;
 }
 
+- (void)dealloc
+{
+    self.undoManager = nil;
+    [super dealloc];
+}
+
 - (void)textDidChange:(NSNotification *)aNotification
 {
     wxUnusedVar(aNotification);
@@ -1745,6 +1751,14 @@ wxSize wxNSTextFieldControl::GetBestSize() const
         [m_textField setFrame:former];
         sz.x = (int)ceil(best.size.width);
         sz.y = (int)ceil(best.size.height);
+
+        // never be smaller than single-line NSMiniControlSize field:
+        sz.y = wxMax(sz.y, 16);
+
+        // !!! Any changes to these adjustments must be mirrored in wxTextCtrl::DoGetSizeFromTextSize() !!!
+
+        sz.x -= 4;
+        sz.y -= 2;
 
         if ( [m_textField isBezeled] || [m_textField isBordered] )
         {

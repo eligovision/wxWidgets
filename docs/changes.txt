@@ -162,6 +162,9 @@ Changes in behaviour not resulting in compilation errors
 - wxDateTime::ParseRfc822Date() now interprets a 2-digit year as 19xx, or
   20xx for 00..29, whereas earlier e.g. 95 was interpreted literally as 95 AD.
 
+- wxPoint ctor taking wxRealPoint now rounds its coordinates instead of
+  truncating them.
+
 
 Changes in behaviour which may result in build errors
 -----------------------------------------------------
@@ -247,6 +250,40 @@ Changes in behaviour which may result in build errors
 
 - Microsoft Visual Studio 2003 (a.k.a. MSVC 7) is not supported any longer, the
   minimum required version is now 2005.
+
+
+3.2.11: (released 2026-??-??)
+
+All:
+
+- Support defining wxNO_IMPLICIT_WXSTRING_CONV_TO_PTR in wxString (#26307).
+
+
+3.2.10: (released 2026-03-03)
+-----------------------------
+
+All (GUI):
+
+- Fix stc.h with wxNO_IMPLICIT_WXSTRING_ENCODING (reid-p, arch1t3cht, #25047).
+- Fix right/middle click events in vertical wxAuiToolBar (#26242).
+
+wxMSW:
+
+- Add MSVS 2026 solution files (PB, #26140).
+- Don't use first image for wxListCtrl items without images (#26062).
+- Fix regression in wxStaticBitmap::SetBitmap() in 3.2.9 (#26106).
+- Handle font names longer than 31 characters (moi15moi, #25333).
+
+wxOSX:
+
+- Fix install names after "make install" (#25675).
+- Fix bug when deleting wxDataViewCtrl items (Hartwig Wiesmann, #26138).
+- Fix crash on some key presses in wxDataViewCtrl (#26160).
+- Fix memory leaks in a number of controls (#26208).
+- Fix regression in wxFileDialog filters in 3.2.9 (#26148).
+- Improve wxRichTextCtrl handling of cursor keys (Lee Ockert, #26064).
+- Many appearance fixes for macOS 26 Tahoe (#26058, #25767, #26121).
+- Show applications launched from keyboard under macOS 26 (#26095).
 
 
 3.2.9: (released 2025-12-12)

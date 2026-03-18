@@ -1,4 +1,4 @@
-wxWidgets 3.2.9 Release Notes
+wxWidgets 3.2.10 Release Notes
 =============================
 
 Welcome to the new stable release of wxWidgets, a free and open source
@@ -16,7 +16,7 @@ more about wxWidgets at:
 
 Documentation is available online at:
 
-* https://docs.wxwidgets.org/3.2.9/
+* https://docs.wxwidgets.org/3.2.10/
 
 wxWidgets sources and binaries for the selected platforms are available for
 download from:
@@ -25,43 +25,38 @@ download from:
 
 or, for a more more permanent but less convenient to use link, from
 
-* https://github.com/wxWidgets/wxWidgets/releases/tag/v3.2.9/
+* https://github.com/wxWidgets/wxWidgets/releases/tag/v3.2.10/
 
-Please see https://docs.wxwidgets.org/3.2.9/overview_install.html for full
+Please see https://docs.wxwidgets.org/3.2.10/overview_install.html for full
 installation instructions.
 
 
 
-Changes since 3.2.8
+Changes since 3.2.9
 -------------------
 
-This release doesn't add any major new features, but contains some important
-fixes for bugs found in the previous 3.2.8 release:
+This is a minor bug-fix release with just a single new addition: wxWidgets now
+includes project files for Microsoft Visual Studio 2026.
 
-- Fix crash when using Farsi as system language under macOS (#25561).
-- Fix handling total window size with GNOME with X11 (#25348).
-- Fix wxGLCanvas scale when using EGL/Wayland in high DPI (Popax21, #23733).
-- Fix missing wxEVT_CHAR for Ctrl-Letter in non-US layouts (#25384).
-- Fix selecting columns in wxGrid with mouse (Dietmar Schwertberger, #25884).
+It does contain a number of important bug fixes for macOS port of wxWidgets,
+notably:
 
-The new release still contains a couple of enhancements, including:
+- Fix install names of the libraries when using "make install" (#25675).
+- Fix crash on some key presses in wxDataViewCtrl (#26160).
+- Fix memory leaks in a number of controls (#26208).
+- Fix regression in wxFileDialog filters in 3.2.9 (#26148).
+- Many fixes for macOS 26 Tahoe (#26058, #25767, #26121, #26095).
 
-- Many improvements to CMake build system (#25448, #25749, #25998).
-- Support for building under macOS 26 Tahoe (#25798).
-- Fix wxStyledTextCtrl support in screen readers (Maarten Bent, #25963).
-- Respect HTML5 charset attribute in wxHTML (Kees van der Oord, #25546).
-- Add support for using EGL 1.4 (and not 1.5) in wxGLCanvas (#22325).
+Some other bugs fixed in this release:
 
-Other changes include:
-
-- Fix memory leak in wxColour::Set() under macOS (#25569).
-- Fix memory leak when using wxOverlay in wxGTK (#24500).
-- Reduce wxStaticBitmap GDI resource usage in wxMSW (Alex Shvartzkop, #25698).
-- Significantly improve performance of drawing bitmaps in wxAUI (#23841).
+- Don't use first image for wxListCtrl items without images in wxMSW (#26062).
+- Fix regression in wxStaticBitmap::SetBitmap() in wxMSW 3.2.9 (#26106).
+- Handle font names longer than 31 characters in wxMSW (moi15moi, #25333).
+- Fix right/middle click events in vertical wxAuiToolBar (#26242).
 
 Please see the full change log for more details:
 
-https://raw.githubusercontent.com/wxWidgets/wxWidgets/v3.2.9/docs/changes.txt
+https://raw.githubusercontent.com/wxWidgets/wxWidgets/v3.2.10/docs/changes.txt
 
 This release is API and ABI-compatible with the previous 3.2.x releases, so
 the existing applications don't even need to be rebuilt to profit from all the
@@ -161,4 +156,4 @@ developed by its users and your contributions to it are always welcome!
 
 Have fun!
 
-The wxWidgets Team, December 2015
+The wxWidgets Team, March 2026

@@ -2601,12 +2601,9 @@ wxWidgetImpl( peer, flags )
     // check if the user wants to create the control initially hidden
     if ( !peer->IsShown() )
         SetVisibility(false);
-    
-    // gc aware handling
-    if ( m_osxView )
-        CFRetain(m_osxView);
-    [m_osxView release];
-    m_osxView.clipsToBounds = YES;
+
+    if ( IsUserPane() )
+        ClipsToBounds(true);
 }
 
 
@@ -2639,11 +2636,10 @@ wxWidgetCocoaImpl::~wxWidgetCocoaImpl()
         if ( sv != nil )
             [m_osxView removeFromSuperview];
     }
-    // gc aware handling
-    if ( m_osxView )
-        CFRelease(m_osxView);
 
     wxCocoaGestures::EraseForObject(this);
+
+    [m_osxView release];
 }
 
 void wxWidgetCocoaImpl::BeginNativeKeyDownEvent( NSEvent* event )
@@ -4150,6 +4146,7 @@ void wxWidgetCocoaImpl::UseClippingView(bool clip)
             m_osxClipView = [[wxNSClipView alloc] initWithFrame: m_osxView.bounds];
             [(NSClipView*)m_osxClipView setDrawsBackground: NO];
             [m_osxView addSubview:m_osxClipView];
+            [m_osxClipView release];
 
             // add tracking for this clipview as well
 
@@ -4164,6 +4161,11 @@ void wxWidgetCocoaImpl::UseClippingView(bool clip)
         }
     }
 #endif
+}
+
+void wxWidgetCocoaImpl::ClipsToBounds(bool clip)
+{
+    m_osxView.clipsToBounds = clip;
 }
 
 

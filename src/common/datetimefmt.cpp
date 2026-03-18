@@ -356,7 +356,10 @@ wxString wxDateTime::Format(const wxString& formatp, const TimeZone& tz) const
         {
             case 'l':
 #ifdef __WINDOWS__
+            // Versions of MSVC until 2015 and MinGW don't support "%F".
+#if defined(__MINGW32__) || (defined(__VISUALC__) && !wxCHECK_VISUALC_VERSION(14))
             case 'F':
+#endif
             case 'g':
             case 'G':
             case 'V':
@@ -633,6 +636,10 @@ wxString wxDateTime::Format(const wxString& formatp, const TimeZone& tz) const
 
                 case wxT('S'):       // second as a decimal number (00-61)
                     res += wxString::Format(fmt, tm.sec);
+                    break;
+
+                case wxT('T'):       // time as %H:%M:%S
+                    res += wxString::Format(wxT("%02d:%02d:%02d"), tm.hour, tm.min, tm.sec);
                     break;
 
                 case wxT('U'):       // week number in the year (Sunday 1st week day)
