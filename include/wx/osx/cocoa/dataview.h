@@ -447,6 +447,10 @@ private:
 
     -(wxCocoaDataViewControl*) implementation;
     -(void) setImplementation:(wxCocoaDataViewControl*) newImplementation;
+
+#if __MAC_OS_X_VERSION_MAX_ALLOWED < 110000
+    -(void)setStyle:(NSInteger)style;
+#endif
 @end
 
 // ============================================================================
