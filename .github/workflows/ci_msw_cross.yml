@@ -82,7 +82,7 @@ jobs:
             debian_release: stable
             triplet: i686-w64-mingw32
           - name: wxMSW/Univ
-            debian_release: testing
+            debian_release: unstable
             configure_flags: --enable-universal --disable-compat32 --disable-debug --disable-optimise
             minimal: true
     env:
@@ -129,12 +129,12 @@ jobs:
           echo "wxTEST_RUNNER=wine" >> $GITHUB_ENV
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           submodules: 'recursive'
 
       - name: Install CCache
-        uses: hendrikmuhs/ccache-action@v1.2.12
+        uses: hendrikmuhs/ccache-action@v1.2.23
         with:
           key: ${{ matrix.name }}
 
